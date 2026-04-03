@@ -1,0 +1,10 @@
+{
+  "id": "loop-lancer",
+  "title": "Loop Lancer",
+  "summary": "A score-attack arena prototype where each dash leaves a trail that can clear the next drone.",
+  "genre": "arcade",
+  "ageTier": "teens",
+  "entryPoint": "index.html",
+  "platforms": ["desktop", "mobile"],
+  "tags": ["arcade", "score-attack", "arena", "touch-friendly", "leaderboard"]
+}

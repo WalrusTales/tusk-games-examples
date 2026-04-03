@@ -1,0 +1,20 @@
+{
+  "name": "tusk-games-examples",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "check": "pnpm lint && pnpm validate",
+    "format": "biome format --write .",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "package": "node ./scripts/package-games.mjs",
+    "validate": "node ./scripts/validate-games.mjs"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.10"
+  }
+}

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Snack Stack Safari</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="panel">
+        <div class="hero">
+          <p class="eyebrow">Kids Tier Sample</p>
+          <h1>Snack Stack Safari</h1>
+          <p class="summary">
+            Each safari friend wants the same three snacks in a different order.
+            Build the right stack to earn badges.
+          </p>
+        </div>
+
+        <div class="hud">
+          <div>
+            <span class="label">Guide</span>
+            <strong data-animal-name>Elephant</strong>
+          </div>
+          <div>
+            <span class="label">Score</span>
+            <strong data-score>0</strong>
+          </div>
+          <div>
+            <span class="label">Round</span>
+            <strong data-round>1</strong>
+          </div>
+        </div>
+
+        <section class="rule-card">
+          <p class="label">Rule</p>
+          <p data-rule-text></p>
+          <p class="target" data-target-text></p>
+        </section>
+
+        <section class="stack-card">
+          <div class="stack-header">
+            <p class="label">Your Stack</p>
+            <button type="button" class="ghost" data-clear>Clear</button>
+          </div>
+          <div class="stack-slots" data-stack-slots></div>
+        </section>
+
+        <section class="picker">
+          <p class="label">Choose Snacks</p>
+          <div class="snack-grid" data-snack-grid></div>
+        </section>
+
+        <p class="status" data-status>
+          Pick three snacks to match the safari guide's favorite order.
+        </p>
+
+        <div class="actions">
+          <button type="button" data-check>Check Stack</button>
+          <button type="button" class="ghost" data-next>Next Guide</button>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="./game.js"></script>
+  </body>
+</html>

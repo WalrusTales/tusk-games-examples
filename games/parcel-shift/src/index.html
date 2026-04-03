@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Parcel Shift</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="panel">
+        <div class="hero">
+          <p class="eyebrow">General Catalog Sample</p>
+          <h1>Parcel Shift</h1>
+          <p class="summary">
+            Three conveyor lanes, three destination docks, and one short tick to
+            set each route before the parcels ship.
+          </p>
+        </div>
+
+        <div class="hud">
+          <div>
+            <span class="label">Correct</span>
+            <strong data-score>0</strong>
+          </div>
+          <div>
+            <span class="label">Missed</span>
+            <strong data-misses>0</strong>
+          </div>
+          <div>
+            <span class="label">Tick</span>
+            <strong data-tick>1</strong>
+          </div>
+        </div>
+
+        <section class="lane-board" data-lanes></section>
+
+        <p class="status" data-status>
+          Cycle each lane's route, then run the next dispatch tick.
+        </p>
+
+        <div class="actions">
+          <button type="button" data-run>Run Dispatch Tick</button>
+          <button type="button" class="ghost" data-reset>Reset Floor</button>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="./game.js"></script>
+  </body>
+</html>

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Basement Frequency</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="panel">
+        <div class="hero">
+          <p class="eyebrow">Adults Tier Sample</p>
+          <h1>Basement Frequency</h1>
+          <p class="summary">
+            The basement stays dark between radio pulses. Listen, reveal the
+            threat for a moment, then barricade one room before the night turns.
+          </p>
+        </div>
+
+        <div class="hud">
+          <div>
+            <span class="label">Stability</span>
+            <strong data-stability>3</strong>
+          </div>
+          <div>
+            <span class="label">Night</span>
+            <strong data-night>1</strong>
+          </div>
+          <div>
+            <span class="label">Barricade</span>
+            <strong data-barricade>None</strong>
+          </div>
+        </div>
+
+        <section class="room-grid" data-rooms></section>
+
+        <p class="status" data-status>
+          Pulse the radio to reveal the movement, then barricade one room.
+        </p>
+
+        <div class="actions">
+          <button type="button" data-pulse>Pulse Radio</button>
+          <button type="button" class="ghost" data-advance>Advance Night</button>
+          <button type="button" class="ghost" data-reset>Reset Basement</button>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="./game.js"></script>
+  </body>
+</html>

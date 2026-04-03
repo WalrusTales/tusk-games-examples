@@ -1,0 +1,169 @@
+:root {
+  color-scheme: light;
+  font-family: "Trebuchet MS", "Avenir Next", sans-serif;
+  color: #1f2937;
+  background: radial-gradient(
+    circle at top,
+    #fef3c7 0%,
+    #f9a8d4 35%,
+    #fb7185 100%
+  );
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+.shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.panel {
+  width: min(100%, 760px);
+  padding: 24px;
+  border-radius: 28px;
+  background: rgba(255, 251, 235, 0.9);
+  box-shadow: 0 28px 70px rgba(157, 23, 77, 0.18);
+}
+
+.hero h1 {
+  margin: 8px 0 12px;
+  font-size: clamp(2.4rem, 7vw, 4rem);
+  line-height: 0.95;
+}
+
+.eyebrow,
+.label {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9d174d;
+}
+
+.summary,
+.status,
+.rule-card p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.hud {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.hud div,
+.rule-card,
+.stack-card,
+.picker {
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.68);
+  padding: 16px;
+}
+
+.hud strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 1.5rem;
+}
+
+.rule-card,
+.stack-card,
+.picker {
+  margin-top: 16px;
+}
+
+.target {
+  margin-top: 10px;
+  color: #be185d;
+  font-weight: 700;
+}
+
+.stack-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.stack-slots {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.slot {
+  min-height: 84px;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  border: 2px dashed rgba(157, 23, 77, 0.25);
+  border-radius: 18px;
+  text-align: center;
+}
+
+.slot[data-filled="true"] {
+  background: #fbcfe8;
+  border-style: solid;
+}
+
+.snack-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.snack-button,
+button {
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 18px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  background: #9d174d;
+  color: #fff7ed;
+}
+
+button.ghost {
+  background: rgba(190, 24, 93, 0.12);
+  color: #9d174d;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.status {
+  margin-top: 18px;
+}
+
+@media (max-width: 720px) {
+  .hud,
+  .stack-slots,
+  .snack-grid,
+  .actions {
+    grid-template-columns: 1fr;
+  }
+
+  .actions {
+    display: grid;
+  }
+}

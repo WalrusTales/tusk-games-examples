@@ -1,0 +1,10 @@
+{
+  "id": "template-game",
+  "title": "Template Game",
+  "summary": "Minimal starter structure for a Tusk Games sample.",
+  "genre": "prototype",
+  "ageTier": "teens",
+  "entryPoint": "index.html",
+  "platforms": ["desktop", "mobile"],
+  "tags": ["template", "starter"]
+}

@@ -1,0 +1,10 @@
+{
+  "id": "basement-frequency",
+  "title": "Basement Frequency",
+  "summary": "An atmospheric survival prototype where brief radio pulses reveal which room to barricade.",
+  "genre": "survival",
+  "ageTier": "adults",
+  "entryPoint": "index.html",
+  "platforms": ["desktop", "mobile"],
+  "tags": ["adults", "survival", "atmospheric", "audio-driven", "prototype"]
+}

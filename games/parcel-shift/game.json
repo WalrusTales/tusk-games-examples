@@ -1,0 +1,10 @@
+{
+  "id": "parcel-shift",
+  "title": "Parcel Shift",
+  "summary": "A conveyor-routing prototype about rewiring three lanes before the next dispatch tick.",
+  "genre": "strategy",
+  "ageTier": "teens",
+  "entryPoint": "index.html",
+  "platforms": ["desktop", "mobile"],
+  "tags": ["strategy", "routing", "management", "touch-friendly", "puzzle"]
+}

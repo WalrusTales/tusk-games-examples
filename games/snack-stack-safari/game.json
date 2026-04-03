@@ -1,0 +1,10 @@
+{
+  "id": "snack-stack-safari",
+  "title": "Snack Stack Safari",
+  "summary": "A touch-first sorting puzzler where each animal changes the snack stacking rule.",
+  "genre": "puzzle",
+  "ageTier": "kids",
+  "entryPoint": "index.html",
+  "platforms": ["desktop", "mobile"],
+  "tags": ["kids", "puzzle", "sorting", "touch-friendly", "family-safe"]
+}

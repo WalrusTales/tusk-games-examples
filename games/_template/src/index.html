@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Template Game</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="card">
+        <p class="eyebrow">tusk-games-examples</p>
+        <h1>Template Game</h1>
+        <p class="summary">
+          Replace this with a real sample. The only hard rule is that
+          <code>index.html</code> stays at the root of the uploaded bundle.
+        </p>
+
+        <div class="hud">
+          <div>
+            <span class="label">Score</span>
+            <strong data-score>0</strong>
+          </div>
+          <div>
+            <span class="label">Input</span>
+            <strong>Click / Space</strong>
+          </div>
+        </div>
+
+        <p class="status" data-status></p>
+
+        <div class="actions">
+          <button data-action type="button">Score</button>
+          <button data-reset type="button" class="ghost">Reset</button>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="./game.js"></script>
+  </body>
+</html>
