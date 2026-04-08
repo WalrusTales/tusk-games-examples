@@ -24,5 +24,8 @@ fmt:
 check:
     pnpm check
 
+serve game port="8000":
+    pnpm dlx serve games/{{game}}/src -l {{port}}
+
 clean:
     rm -f dist/*.zip
