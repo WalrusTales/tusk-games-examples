@@ -168,6 +168,188 @@ const Sound = (() => {
   };
 })();
 
+const Music = (() => {
+  let actx = null;
+  let masterGain = null;
+  let masterFilter = null;
+  let schedulerId = null;
+  let running = false;
+
+  // Musical constants
+  const KEY = 55; // A1 in Hz — root note
+  // Minor scale ratios: root, minor 2nd (unused), minor 3rd, perfect 4th, perfect 5th, minor 6th, minor 7th
+  const SCALE = [1, 9 / 8, 6 / 5, 4 / 3, 3 / 2, 8 / 5, 9 / 5];
+  const LOOKAHEAD = 0.1; // seconds to schedule ahead
+  const SCHEDULE_INTERVAL = 25; // ms between scheduler ticks
+
+  // Per-wave derived state
+  let bpm = 110;
+  let beatDur = 60 / bpm; // seconds per beat
+  let nextBeatTime = 0;
+  let _beatCount = 0;
+
+  // Reactive state (smoothed each frame)
+  let currentWave = 0;
+  let currentCombo = 0;
+  let proximityFactor = 0; // 0 = far, 1 = very close
+  let waveIntensity = 0; // 0..1, ramps up with wave number
+
+  // Layer gain nodes
+  const layers = {};
+
+  function getCtx() {
+    if (!actx) {
+      actx = new (window.AudioContext || window.webkitAudioContext)();
+      masterGain = actx.createGain();
+      masterFilter = actx.createBiquadFilter();
+      masterFilter.type = 'lowpass';
+      masterFilter.frequency.value = 22050;
+      masterFilter.Q.value = 1;
+      masterGain.connect(masterFilter);
+      masterFilter.connect(actx.destination);
+
+      for (const name of ['sub', 'kick', 'hihat', 'bass', 'arp', 'lead']) {
+        const g = actx.createGain();
+        g.gain.value = 0;
+        g.connect(masterGain);
+        layers[name] = g;
+      }
+    }
+    return actx;
+  }
+
+  function _note(scale, octave = 0) {
+    return KEY * SCALE[scale % SCALE.length] * 2 ** octave;
+  }
+
+  // --- Layer scheduling functions (filled in by later tasks) ---
+  function scheduleSub() {}
+  function scheduleKick() {}
+  function scheduleHihat() {}
+  function scheduleBass() {}
+  function scheduleArp() {}
+  function updateLead() {}
+
+  function schedulerTick() {
+    const a = getCtx();
+    const limit = a.currentTime + LOOKAHEAD;
+    while (nextBeatTime < limit) {
+      scheduleSub(nextBeatTime);
+      scheduleKick(nextBeatTime);
+      scheduleHihat(nextBeatTime);
+      scheduleBass(nextBeatTime);
+      scheduleArp(nextBeatTime);
+      _beatCount++;
+      nextBeatTime += beatDur / 4; // schedule at sixteenth-note resolution
+    }
+  }
+
+  function start() {
+    const a = getCtx();
+    if (running) return;
+    running = true;
+    currentWave = 0;
+    currentCombo = 0;
+    proximityFactor = 0;
+    waveIntensity = 0;
+    bpm = 110;
+    beatDur = 60 / bpm;
+    nextBeatTime = a.currentTime + 0.05;
+    _beatCount = 0;
+    masterGain.gain.setValueAtTime(0.6, a.currentTime);
+    schedulerId = setInterval(schedulerTick, SCHEDULE_INTERVAL);
+  }
+
+  function stop() {
+    running = false;
+    if (schedulerId !== null) {
+      clearInterval(schedulerId);
+      schedulerId = null;
+    }
+    if (actx) {
+      masterGain.gain.linearRampToValueAtTime(0, actx.currentTime + 0.3);
+    }
+    _beatCount = 0;
+  }
+
+  function update(gameState, _el) {
+    if (!running) return;
+    const a = getCtx();
+
+    // Read game state
+    currentWave = gameState.wave;
+    currentCombo = gameState.combo;
+
+    // Wave intensity: 0 at wave 1, approaches 1 asymptotically
+    waveIntensity = Math.min(1, (currentWave - 1) / 15);
+
+    // BPM: 110 at wave 1, +3/wave, cap 150
+    bpm = Math.min(150, 110 + (currentWave - 1) * 3);
+    beatDur = 60 / bpm;
+
+    // Proximity: find nearest drone distance, map to 0..1
+    proximityFactor = 0;
+    if (gameState.drones.length > 0 && gameState.phase === 'playing') {
+      let minDist = Infinity;
+      for (const d of gameState.drones) {
+        if (!d.alive) continue;
+        const dist = Math.hypot(
+          d.x - gameState.player.x,
+          d.y - gameState.player.y,
+        );
+        if (dist < minDist) minDist = dist;
+      }
+      const dangerZone = gameState.arenaRadius * 0.4;
+      proximityFactor = Math.max(0, Math.min(1, 1 - minDist / dangerZone));
+    }
+
+    // Master filter: 22kHz when safe, drops to 800Hz when drones are close
+    const filterTarget =
+      22050 - proximityFactor * 21250 * (0.3 + waveIntensity * 0.7);
+    masterFilter.frequency.linearRampToValueAtTime(
+      Math.max(800, filterTarget),
+      a.currentTime + 0.05,
+    );
+
+    // Layer volumes based on wave and phase
+    const t = a.currentTime + 0.05;
+    const phase = gameState.phase;
+    const isBreak = phase === 'wave-break' || phase === 'wave-preview';
+    const breakMul = isBreak ? 0.2 : 1;
+
+    layers.sub.gain.linearRampToValueAtTime(
+      (0.25 + waveIntensity * 0.15) * (isBreak ? 0.6 : 1),
+      t,
+    );
+    layers.kick.gain.linearRampToValueAtTime(
+      (0.3 + waveIntensity * 0.1) * breakMul,
+      t,
+    );
+    layers.hihat.gain.linearRampToValueAtTime(
+      currentWave >= 2 ? (0.08 + waveIntensity * 0.07) * breakMul : 0,
+      t,
+    );
+    layers.bass.gain.linearRampToValueAtTime(
+      currentWave >= 3 ? (0.15 + waveIntensity * 0.1) * breakMul : 0,
+      t,
+    );
+    layers.arp.gain.linearRampToValueAtTime(
+      currentWave >= 5
+        ? (0.06 + Math.min(currentCombo, 5) * 0.02) * breakMul
+        : 0,
+      t,
+    );
+    layers.lead.gain.linearRampToValueAtTime(
+      currentWave >= 7 ? proximityFactor * (0.1 + waveIntensity * 0.1) : 0,
+      t,
+    );
+
+    updateLead(a, t);
+  }
+
+  return { start, stop, update };
+})();
+
 const ctx = canvas.getContext(
   '2d',
   useP3 ? { colorSpace: 'display-p3' } : undefined,
@@ -340,6 +522,7 @@ function triggerDash(rawX, rawY) {
 }
 
 function resetGame() {
+  Music.stop();
   const fresh = initState();
   for (const key of Object.keys(fresh)) {
     state[key] = fresh[key];
@@ -994,6 +1177,7 @@ function tick(now) {
   lastTime = now;
 
   update(dt);
+  Music.update(state, elapsed);
   draw();
 
   requestAnimationFrame(tick);
@@ -1103,6 +1287,7 @@ function spawnDrone(type = 'basic', preX, preY) {
 
 function startGame() {
   if (state.phase !== 'title') return;
+  Music.start();
   state.phase = 'wave-preview';
   state.player.x = state.cx;
   state.player.y = state.cy;
