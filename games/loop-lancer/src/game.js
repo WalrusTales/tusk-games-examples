@@ -10,11 +10,20 @@ const C = {
   DRONE_BASE_SPEED: 80,
   DRONE_SPEED_STEP: 8,
   WAVE_BREAK: 1500,
+  WAVE_PREVIEW: 1200,
   COMBO_SHIELD: 5,
   BASE_DRONES: 3,
   DRONES_PER_WAVE: 1.4,
   SPAWN_STAGGER: 400,
   TRAIL_GLOW: 12,
+  ZOOM_BASE: 1.0,
+  ZOOM_MIN: 0.82,
+  ZOOM_WAVE_STEP: 0.02,
+  WANDERER_DRIFT: 3.0,
+  POWERUP_DROP_CHANCE: 0.08,
+  POWERUP_RADIUS: 6,
+  POWERUP_LIFETIME: 8000,
+  POWERUP_DURATION: { wide: 5000, slow: 4000, double: 5000, extend: 6000 },
   COLORS: {
     bg: '#0a0a1a',
     arena: 'rgba(56, 189, 248, 0.08)',
@@ -25,9 +34,16 @@ const C = {
     trailWithAlpha: (a) => `rgba(34, 211, 238, ${a})`,
     drone: '#fbbf24',
     droneGlow: 'rgba(251, 191, 36, 0.3)',
+    droneWanderer: '#f87171',
+    droneShielded: '#a78bfa',
+    droneSplitter: '#fb923c',
     shield: '#4ade80',
     hud: 'rgba(226, 232, 240, 0.7)',
     combo: '#facc15',
+    powerWide: '#38bdf8',
+    powerSlow: '#c084fc',
+    powerDouble: '#34d399',
+    powerExtend: '#fbbf24',
   },
 };
 
@@ -41,6 +57,7 @@ function initState() {
     score: 0,
     combo: 0,
     hasShield: false,
+    multiKill: { text: '', timer: 0 },
     wave: 0,
     waveTimer: 0,
     spawnQueue: [],
@@ -49,6 +66,11 @@ function initState() {
     arenaRadius: 0,
     cx: 0,
     cy: 0,
+    zoom: 1.0,
+    zoomTarget: 1.0,
+    previewDrones: [],
+    powerups: [],
+    activePower: null,
   };
 }
 
@@ -65,10 +87,179 @@ if (useP3) {
     trailWithAlpha: (a) => `color(display-p3 0.05 0.87 0.95 / ${a})`,
     drone: 'color(display-p3 1.0 0.78 0.05)',
     droneGlow: 'color(display-p3 1.0 0.78 0.05 / 0.3)',
+    droneWanderer: 'color(display-p3 1.0 0.45 0.35)',
+    droneShielded: 'color(display-p3 0.7 0.5 1.0)',
+    droneSplitter: 'color(display-p3 1.0 0.6 0.15)',
     shield: 'color(display-p3 0.15 0.92 0.45)',
     combo: 'color(display-p3 1.0 0.84 0.05)',
+    powerWide: 'color(display-p3 0.15 0.78 1.0)',
+    powerSlow: 'color(display-p3 0.8 0.48 1.0)',
+    powerDouble: 'color(display-p3 0.1 0.88 0.55)',
+    powerExtend: 'color(display-p3 1.0 0.78 0.05)',
   });
 }
+
+const Sound = (() => {
+  let actx = null;
+  function ac() {
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    return actx;
+  }
+  function play(fn) {
+    try {
+      fn(ac());
+    } catch (_) {
+      /* audio not available */
+    }
+  }
+
+  function dash() {
+    play((a) => {
+      const osc = a.createOscillator();
+      const gain = a.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(200, a.currentTime);
+      osc.frequency.linearRampToValueAtTime(600, a.currentTime + 0.08);
+      gain.gain.setValueAtTime(0.15, a.currentTime);
+      gain.gain.linearRampToValueAtTime(0, a.currentTime + 0.08);
+      osc.connect(gain);
+      gain.connect(a.destination);
+      osc.start(a.currentTime);
+      osc.stop(a.currentTime + 0.1);
+    });
+  }
+
+  function hit() {
+    play((a) => {
+      const osc = a.createOscillator();
+      const gain = a.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(600, a.currentTime);
+      gain.gain.setValueAtTime(0.15, a.currentTime);
+      gain.gain.linearRampToValueAtTime(0, a.currentTime + 0.06);
+      osc.connect(gain);
+      gain.connect(a.destination);
+      osc.start(a.currentTime);
+      osc.stop(a.currentTime + 0.08);
+    });
+  }
+
+  function shieldGain() {
+    play((a) => {
+      const t = a.currentTime;
+      for (const [freq, start] of [
+        [400, 0],
+        [600, 0.08],
+      ]) {
+        const osc = a.createOscillator();
+        const gain = a.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, t + start);
+        osc.frequency.linearRampToValueAtTime(freq * 2, t + start + 0.06);
+        gain.gain.setValueAtTime(0.12, t + start);
+        gain.gain.linearRampToValueAtTime(0, t + start + 0.06);
+        osc.connect(gain);
+        gain.connect(a.destination);
+        osc.start(t + start);
+        osc.stop(t + start + 0.08);
+      }
+    });
+  }
+
+  function shieldBreak() {
+    play((a) => {
+      const osc = a.createOscillator();
+      const gain = a.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(120, a.currentTime);
+      gain.gain.setValueAtTime(0.2, a.currentTime);
+      gain.gain.linearRampToValueAtTime(0, a.currentTime + 0.2);
+      osc.connect(gain);
+      gain.connect(a.destination);
+      osc.start(a.currentTime);
+      osc.stop(a.currentTime + 0.22);
+    });
+  }
+
+  function gameOver() {
+    play((a) => {
+      const osc = a.createOscillator();
+      const gain = a.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(400, a.currentTime);
+      osc.frequency.linearRampToValueAtTime(100, a.currentTime + 0.5);
+      gain.gain.setValueAtTime(0.15, a.currentTime);
+      gain.gain.linearRampToValueAtTime(0, a.currentTime + 0.5);
+      osc.connect(gain);
+      gain.connect(a.destination);
+      osc.start(a.currentTime);
+      osc.stop(a.currentTime + 0.52);
+    });
+  }
+
+  function waveStart() {
+    play((a) => {
+      const osc = a.createOscillator();
+      const gain = a.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(660, a.currentTime);
+      gain.gain.setValueAtTime(0.1, a.currentTime);
+      gain.gain.linearRampToValueAtTime(0, a.currentTime + 0.12);
+      osc.connect(gain);
+      gain.connect(a.destination);
+      osc.start(a.currentTime);
+      osc.stop(a.currentTime + 0.14);
+    });
+  }
+
+  function multiKill() {
+    play((a) => {
+      const osc = a.createOscillator();
+      const gain = a.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(900, a.currentTime);
+      gain.gain.setValueAtTime(0.15, a.currentTime);
+      gain.gain.linearRampToValueAtTime(0, a.currentTime + 0.06);
+      osc.connect(gain);
+      gain.connect(a.destination);
+      osc.start(a.currentTime);
+      osc.stop(a.currentTime + 0.08);
+    });
+  }
+
+  function powerUp() {
+    play((a) => {
+      const t = a.currentTime;
+      for (const [freq, start] of [
+        [500, 0],
+        [700, 0.06],
+        [900, 0.12],
+      ]) {
+        const osc = a.createOscillator();
+        const gain = a.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, t + start);
+        gain.gain.setValueAtTime(0.1, t + start);
+        gain.gain.linearRampToValueAtTime(0, t + start + 0.04);
+        osc.connect(gain);
+        gain.connect(a.destination);
+        osc.start(t + start);
+        osc.stop(t + start + 0.06);
+      }
+    });
+  }
+
+  return {
+    dash,
+    hit,
+    shieldGain,
+    shieldBreak,
+    gameOver,
+    waveStart,
+    multiKill,
+    powerUp,
+  };
+})();
 
 const ctx = canvas.getContext(
   '2d',
@@ -76,6 +267,13 @@ const ctx = canvas.getContext(
 );
 
 const state = initState();
+const POWERUP_TYPES = ['wide', 'slow', 'double', 'extend'];
+const POWERUP_COLOR_MAP = {
+  wide: 'powerWide',
+  slow: 'powerSlow',
+  double: 'powerDouble',
+  extend: 'powerExtend',
+};
 let elapsed = 0;
 let lastTime = 0;
 let cursorX = 0;
@@ -135,6 +333,13 @@ function clampToArena(x, y) {
   return { x, y };
 }
 
+function screenToWorld(sx, sy) {
+  return {
+    x: state.cx + (sx - state.cx) / state.zoom,
+    y: state.cy + (sy - state.cy) / state.zoom,
+  };
+}
+
 function distToSegment(px, py, x1, y1, x2, y2) {
   const dx = x2 - x1;
   const dy = y2 - y1;
@@ -165,6 +370,7 @@ function spawnParticles(x, y, color, count) {
 
 function triggerDash(rawX, rawY) {
   if (state.phase !== 'playing' || state.player.cooldown > 0) return;
+  Sound.dash();
   const clamped = clampToArena(rawX, rawY);
   state.trails.push({
     x1: state.player.x,
@@ -172,7 +378,22 @@ function triggerDash(rawX, rawY) {
     x2: clamped.x,
     y2: clamped.y,
     born: elapsed,
+    progress: 0,
   });
+  // Double power-up: add a backward trail of the same length
+  if (state.activePower && state.activePower.type === 'double') {
+    const dx = state.player.x - clamped.x;
+    const dy = state.player.y - clamped.y;
+    const backTarget = clampToArena(state.player.x + dx, state.player.y + dy);
+    state.trails.push({
+      x1: state.player.x,
+      y1: state.player.y,
+      x2: backTarget.x,
+      y2: backTarget.y,
+      born: elapsed,
+      progress: 1,
+    });
+  }
   state.player.tx = clamped.x;
   state.player.ty = clamped.y;
   state.player.dashing = true;
@@ -189,6 +410,9 @@ function resetGame() {
 function update(dt) {
   elapsed += dt;
 
+  // Smooth zoom interpolation (all phases)
+  state.zoom += (state.zoomTarget - state.zoom) * 0.02;
+
   // Update particles (all phases so death particles finish animating)
   const dtSec = dt / 1000;
   for (const p of state.particles) {
@@ -204,13 +428,31 @@ function update(dt) {
     if (state.shake < 0.5) state.shake = 0;
   }
 
-  // Remove expired trails
-  state.trails = state.trails.filter(
-    (t) => elapsed - t.born < C.TRAIL_DURATION,
-  );
+  // Decay multi-kill flash timer
+  if (state.multiKill.timer > 0) {
+    state.multiKill.timer = Math.max(0, state.multiKill.timer - dt);
+  }
 
-  // Wave-break countdown
+  // Remove expired trails
+  const trailLife =
+    state.activePower && state.activePower.type === 'extend'
+      ? C.TRAIL_DURATION * 2
+      : C.TRAIL_DURATION;
+  state.trails = state.trails.filter((t) => elapsed - t.born < trailLife);
+
+  // Wave-break countdown → transition to wave-preview
   if (state.phase === 'wave-break') {
+    state.waveTimer -= dt;
+    if (state.waveTimer <= 0) {
+      state.phase = 'wave-preview';
+      state.previewDrones = planWave(state.wave + 1);
+      state.waveTimer = C.WAVE_PREVIEW;
+    }
+    return;
+  }
+
+  // Wave-preview countdown → start wave with pre-planned positions
+  if (state.phase === 'wave-preview') {
     state.waveTimer -= dt;
     if (state.waveTimer <= 0) {
       state.phase = 'playing';
@@ -220,6 +462,32 @@ function update(dt) {
   }
 
   if (state.phase !== 'playing') return;
+
+  // Expire old power-ups
+  state.powerups = state.powerups.filter(
+    (p) => elapsed - p.born <= C.POWERUP_LIFETIME,
+  );
+
+  // Expire active power
+  if (state.activePower !== null && elapsed >= state.activePower.until) {
+    state.activePower = null;
+  }
+
+  // Collect power-ups
+  const collectDist = C.PLAYER_RADIUS + C.POWERUP_RADIUS;
+  state.powerups = state.powerups.filter((p) => {
+    const dx = state.player.x - p.x;
+    const dy = state.player.y - p.y;
+    if (Math.sqrt(dx * dx + dy * dy) <= collectDist) {
+      state.activePower = {
+        type: p.type,
+        until: elapsed + C.POWERUP_DURATION[p.type],
+      };
+      Sound.powerUp();
+      return false;
+    }
+    return true;
+  });
 
   // Decrement cooldown
   if (state.player.cooldown > 0) {
@@ -237,6 +505,9 @@ function update(dt) {
       state.player.y = state.player.ty;
       state.player.dashing = false;
       state.player.cooldown = C.DASH_COOLDOWN;
+      if (state.trails.length > 0) {
+        state.trails[state.trails.length - 1].progress = 1;
+      }
     } else {
       const move = (C.DASH_SPEED * dt) / 1000;
       if (move >= dist) {
@@ -244,29 +515,63 @@ function update(dt) {
         state.player.y = state.player.ty;
         state.player.dashing = false;
         state.player.cooldown = C.DASH_COOLDOWN;
+        if (state.trails.length > 0) {
+          state.trails[state.trails.length - 1].progress = 1;
+        }
       } else {
         state.player.x += (dx / dist) * move;
         state.player.y += (dy / dist) * move;
+      }
+    }
+
+    // Update draw-in progress for the current dash trail
+    if (state.player.dashing && state.trails.length > 0) {
+      const trail = state.trails[state.trails.length - 1];
+      const tdx = trail.x2 - trail.x1;
+      const tdy = trail.y2 - trail.y1;
+      const totalLen = Math.sqrt(tdx * tdx + tdy * tdy);
+      if (totalLen > 0) {
+        const traveled = Math.sqrt(
+          (state.player.x - trail.x1) ** 2 + (state.player.y - trail.y1) ** 2,
+        );
+        trail.progress = Math.min(1, Math.max(0, traveled / totalLen));
+      } else {
+        trail.progress = 1;
       }
     }
   }
 
   // Process spawn queue
   const pending = [];
-  for (const t of state.spawnQueue) {
-    if (elapsed >= t) {
-      spawnDrone();
+  for (const entry of state.spawnQueue) {
+    if (elapsed >= entry.time) {
+      spawnDrone(entry.type, entry.x, entry.y);
     } else {
-      pending.push(t);
+      pending.push(entry);
     }
   }
   state.spawnQueue = pending;
 
   // Trail-drone collision
-  const trailHitDist = C.DRONE_RADIUS + C.TRAIL_WIDTH;
+  const killsByTrail = new Map();
+  const newMinis = [];
   for (const drone of state.drones) {
     if (!drone.alive) continue;
-    for (const trail of state.trails) {
+    const droneR =
+      drone.type === 'wanderer'
+        ? C.DRONE_RADIUS * 1.2
+        : drone.type === 'splitter'
+          ? C.DRONE_RADIUS * 1.3
+          : drone.type === 'mini'
+            ? C.DRONE_RADIUS * 0.6
+            : C.DRONE_RADIUS;
+    const trailW =
+      state.activePower && state.activePower.type === 'wide'
+        ? C.TRAIL_WIDTH * 2
+        : C.TRAIL_WIDTH;
+    const trailHitDist = droneR + trailW;
+    for (let ti = 0; ti < state.trails.length; ti++) {
+      const trail = state.trails[ti];
       if (
         distToSegment(
           drone.x,
@@ -277,22 +582,93 @@ function update(dt) {
           trail.y2,
         ) <= trailHitDist
       ) {
-        drone.alive = false;
-        spawnParticles(drone.x, drone.y, C.COLORS.drone, 8);
-        state.combo += 1;
-        state.score += 1 + state.combo;
-        if (state.combo >= C.COMBO_SHIELD && !state.hasShield) {
-          state.hasShield = true;
-          state.combo = 0;
+        drone.hp -= 1;
+        if (drone.hp > 0) {
+          // Shielded drone survives — flash with fewer particles
+          spawnParticles(drone.x, drone.y, C.COLORS.droneShielded, 4);
+          state.shake = 4;
+        } else {
+          const droneColor =
+            drone.type === 'wanderer'
+              ? C.COLORS.droneWanderer
+              : drone.type === 'shielded'
+                ? C.COLORS.droneShielded
+                : drone.type === 'splitter' || drone.type === 'mini'
+                  ? C.COLORS.droneSplitter
+                  : C.COLORS.drone;
+          drone.alive = false;
+          Sound.hit();
+          spawnParticles(drone.x, drone.y, droneColor, 8);
+          state.combo += 1;
+          state.score += 1 + state.combo;
+          if (state.combo >= C.COMBO_SHIELD && !state.hasShield) {
+            state.hasShield = true;
+            Sound.shieldGain();
+            state.combo = 0;
+          }
+          killsByTrail.set(ti, (killsByTrail.get(ti) || 0) + 1);
+
+          // Splitter: spawn 2 mini-drones perpendicular to the trail
+          if (drone.type === 'splitter') {
+            const trailAngle = Math.atan2(
+              trail.y2 - trail.y1,
+              trail.x2 - trail.x1,
+            );
+            const miniSpeed =
+              (C.DRONE_BASE_SPEED + state.wave * C.DRONE_SPEED_STEP) * 1.5;
+            for (const offset of [Math.PI / 2, -Math.PI / 2]) {
+              const heading = trailAngle + offset;
+              newMinis.push({
+                x: drone.x,
+                y: drone.y,
+                speed: miniSpeed,
+                heading,
+                alive: true,
+                type: 'mini',
+                hp: 1,
+              });
+            }
+          }
+
+          // Power-up drop chance
+          if (Math.random() < C.POWERUP_DROP_CHANCE) {
+            const pType =
+              POWERUP_TYPES[Math.floor(Math.random() * POWERUP_TYPES.length)];
+            state.powerups.push({
+              x: drone.x,
+              y: drone.y,
+              type: pType,
+              born: elapsed,
+            });
+          }
         }
         break;
       }
+    }
+  }
+  // Add any mini-drones spawned by splitters
+  for (const mini of newMinis) {
+    state.drones.push(mini);
+  }
+
+  // Multi-kill bonus: award extra points when a single trail kills 2+ drones
+  for (const [, count] of killsByTrail) {
+    if (count >= 2) {
+      state.score += count * 3;
+      state.multiKill.text = `MULTI x${count}`;
+      state.multiKill.timer = 800;
+      Sound.multiKill();
     }
   }
 
   // Move drones toward player (heading-based steering)
   for (const drone of state.drones) {
     if (!drone.alive) continue;
+
+    // Wanderer drift: add random heading jitter before steering
+    if (drone.type === 'wanderer') {
+      drone.heading += (Math.random() - 0.5) * C.WANDERER_DRIFT * (dt / 1000);
+    }
 
     // Calculate desired angle toward player
     const dx = state.player.x - drone.x;
@@ -313,15 +689,27 @@ function update(dt) {
     }
 
     // Move in heading direction
-    const move = (drone.speed * dt) / 1000;
+    const effectiveSpeed =
+      state.activePower && state.activePower.type === 'slow'
+        ? drone.speed * 0.5
+        : drone.speed;
+    const move = (effectiveSpeed * dt) / 1000;
     drone.x += Math.cos(drone.heading) * move;
     drone.y += Math.sin(drone.heading) * move;
   }
 
   // Drone-player collision
-  const collisionDist = C.PLAYER_RADIUS + C.DRONE_RADIUS;
   for (const drone of state.drones) {
     if (!drone.alive) continue;
+    const droneR =
+      drone.type === 'wanderer'
+        ? C.DRONE_RADIUS * 1.2
+        : drone.type === 'splitter'
+          ? C.DRONE_RADIUS * 1.3
+          : drone.type === 'mini'
+            ? C.DRONE_RADIUS * 0.6
+            : C.DRONE_RADIUS;
+    const collisionDist = C.PLAYER_RADIUS + droneR;
     const dx = state.player.x - drone.x;
     const dy = state.player.y - drone.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
@@ -329,11 +717,13 @@ function update(dt) {
       drone.alive = false;
       if (state.hasShield) {
         state.hasShield = false;
+        Sound.shieldBreak();
         spawnParticles(state.player.x, state.player.y, C.COLORS.shield, 12);
         state.shake = 8;
         state.combo = 0;
       } else {
         state.phase = 'game-over';
+        Sound.gameOver();
         state.shake = 15;
         state.gameOverAt = elapsed;
       }
@@ -365,6 +755,12 @@ function draw() {
     ctx.translate(sx, sy);
   }
 
+  // Zoom transform (wraps gameplay elements only)
+  ctx.save();
+  ctx.translate(state.cx, state.cy);
+  ctx.scale(state.zoom, state.zoom);
+  ctx.translate(-state.cx, -state.cy);
+
   // Arena fill + border
   ctx.beginPath();
   ctx.arc(state.cx, state.cy, state.arenaRadius, 0, Math.PI * 2);
@@ -377,42 +773,203 @@ function draw() {
   // Dash trails
   ctx.save();
   ctx.lineCap = 'round';
-  ctx.lineWidth = C.TRAIL_WIDTH;
   ctx.shadowColor = C.COLORS.trail;
+  const drawTrailLife =
+    state.activePower && state.activePower.type === 'extend'
+      ? C.TRAIL_DURATION * 2
+      : C.TRAIL_DURATION;
+  const drawTrailW =
+    state.activePower && state.activePower.type === 'wide'
+      ? C.TRAIL_WIDTH * 2
+      : C.TRAIL_WIDTH;
   for (const trail of state.trails) {
-    const age = (elapsed - trail.born) / C.TRAIL_DURATION;
+    const age = (elapsed - trail.born) / drawTrailLife;
     const alpha = 1 - age;
-    ctx.strokeStyle = C.COLORS.trailWithAlpha(alpha);
-    ctx.shadowBlur = C.TRAIL_GLOW * (1 - age);
-    ctx.beginPath();
-    ctx.moveTo(trail.x1, trail.y1);
-    ctx.lineTo(trail.x2, trail.y2);
-    ctx.stroke();
+    const progress = trail.progress ?? 1;
+
+    if (progress < 1) {
+      // Draw-in effect: bright traveled portion + dim projected portion
+      const mx = trail.x1 + (trail.x2 - trail.x1) * progress;
+      const my = trail.y1 + (trail.y2 - trail.y1) * progress;
+
+      // Traveled portion — brighter and thicker
+      ctx.lineWidth = drawTrailW * 2.5;
+      ctx.shadowBlur = C.TRAIL_GLOW * (1 - age) * 1.8;
+      ctx.strokeStyle = C.COLORS.trailWithAlpha(Math.min(1, alpha + 0.2));
+      ctx.beginPath();
+      ctx.moveTo(trail.x1, trail.y1);
+      ctx.lineTo(mx, my);
+      ctx.stroke();
+
+      // Untraveled/projected portion — dim
+      ctx.lineWidth = drawTrailW;
+      ctx.shadowBlur = C.TRAIL_GLOW * (1 - age);
+      ctx.strokeStyle = C.COLORS.trailWithAlpha(alpha * 0.3);
+      ctx.beginPath();
+      ctx.moveTo(mx, my);
+      ctx.lineTo(trail.x2, trail.y2);
+      ctx.stroke();
+    } else {
+      // Completed trail — render as before
+      ctx.lineWidth = drawTrailW;
+      ctx.strokeStyle = C.COLORS.trailWithAlpha(alpha);
+      ctx.shadowBlur = C.TRAIL_GLOW * (1 - age);
+      ctx.beginPath();
+      ctx.moveTo(trail.x1, trail.y1);
+      ctx.lineTo(trail.x2, trail.y2);
+      ctx.stroke();
+    }
   }
   ctx.restore();
 
   // Drones
   ctx.save();
-  ctx.shadowColor = C.COLORS.droneGlow;
   ctx.shadowBlur = 6;
-  ctx.fillStyle = C.COLORS.drone;
   for (const drone of state.drones) {
     if (!drone.alive) continue;
     const angle = drone.heading;
-    const r = C.DRONE_RADIUS;
-    ctx.save();
-    ctx.translate(drone.x, drone.y);
-    ctx.rotate(angle);
-    ctx.beginPath();
-    ctx.moveTo(r, 0);
-    ctx.lineTo(0, r * 0.6);
-    ctx.lineTo(-r, 0);
-    ctx.lineTo(0, -r * 0.6);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
+
+    if (drone.type === 'wanderer') {
+      // Circle shape, red color
+      const r = C.DRONE_RADIUS * 1.2;
+      ctx.shadowColor = C.COLORS.droneWanderer;
+      ctx.fillStyle = C.COLORS.droneWanderer;
+      ctx.beginPath();
+      ctx.arc(drone.x, drone.y, r, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (drone.type === 'shielded') {
+      // Diamond shape, purple color + optional shield ring
+      const r = C.DRONE_RADIUS;
+      ctx.shadowColor = C.COLORS.droneShielded;
+      ctx.fillStyle = C.COLORS.droneShielded;
+      ctx.save();
+      ctx.translate(drone.x, drone.y);
+      ctx.rotate(angle);
+      ctx.beginPath();
+      ctx.moveTo(r, 0);
+      ctx.lineTo(0, r * 0.6);
+      ctx.lineTo(-r, 0);
+      ctx.lineTo(0, -r * 0.6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      // Shield ring when hp=2
+      if (drone.hp === 2) {
+        ctx.save();
+        ctx.strokeStyle = C.COLORS.droneShielded;
+        ctx.globalAlpha = 0.4 + 0.2 * Math.sin(elapsed * 0.005);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(drone.x, drone.y, r + 4, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        ctx.restore();
+      }
+    } else if (drone.type === 'splitter') {
+      // Slightly larger diamond, orange color
+      const r = C.DRONE_RADIUS * 1.3;
+      ctx.shadowColor = C.COLORS.droneSplitter;
+      ctx.fillStyle = C.COLORS.droneSplitter;
+      ctx.save();
+      ctx.translate(drone.x, drone.y);
+      ctx.rotate(angle);
+      ctx.beginPath();
+      ctx.moveTo(r, 0);
+      ctx.lineTo(0, r * 0.6);
+      ctx.lineTo(-r, 0);
+      ctx.lineTo(0, -r * 0.6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    } else if (drone.type === 'mini') {
+      // Small diamond, orange color
+      const r = C.DRONE_RADIUS * 0.6;
+      ctx.shadowColor = C.COLORS.droneSplitter;
+      ctx.fillStyle = C.COLORS.droneSplitter;
+      ctx.save();
+      ctx.translate(drone.x, drone.y);
+      ctx.rotate(angle);
+      ctx.beginPath();
+      ctx.moveTo(r, 0);
+      ctx.lineTo(0, r * 0.6);
+      ctx.lineTo(-r, 0);
+      ctx.lineTo(0, -r * 0.6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    } else {
+      // Basic: diamond shape, amber color (original)
+      const r = C.DRONE_RADIUS;
+      ctx.shadowColor = C.COLORS.droneGlow;
+      ctx.fillStyle = C.COLORS.drone;
+      ctx.save();
+      ctx.translate(drone.x, drone.y);
+      ctx.rotate(angle);
+      ctx.beginPath();
+      ctx.moveTo(r, 0);
+      ctx.lineTo(0, r * 0.6);
+      ctx.lineTo(-r, 0);
+      ctx.lineTo(0, -r * 0.6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
   }
   ctx.restore();
+
+  // Preview drones (pulsing outlines during wave-preview phase)
+  if (state.phase === 'wave-preview' && state.previewDrones.length > 0) {
+    const pulseAlpha = 0.15 + 0.15 * Math.sin(elapsed * 0.008);
+    ctx.save();
+    ctx.lineWidth = 1.5;
+    for (const pd of state.previewDrones) {
+      let color;
+      if (pd.type === 'wanderer') {
+        color = C.COLORS.droneWanderer;
+      } else if (pd.type === 'shielded') {
+        color = C.COLORS.droneShielded;
+      } else if (pd.type === 'splitter') {
+        color = C.COLORS.droneSplitter;
+      } else {
+        color = C.COLORS.drone;
+      }
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = pulseAlpha;
+
+      if (pd.type === 'wanderer') {
+        const r = C.DRONE_RADIUS * 1.2;
+        ctx.beginPath();
+        ctx.arc(pd.x, pd.y, r, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (pd.type === 'splitter') {
+        const r = C.DRONE_RADIUS * 1.3;
+        ctx.save();
+        ctx.translate(pd.x, pd.y);
+        ctx.beginPath();
+        ctx.moveTo(r, 0);
+        ctx.lineTo(0, r * 0.6);
+        ctx.lineTo(-r, 0);
+        ctx.lineTo(0, -r * 0.6);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
+      } else {
+        const r = C.DRONE_RADIUS;
+        ctx.save();
+        ctx.translate(pd.x, pd.y);
+        ctx.beginPath();
+        ctx.moveTo(r, 0);
+        ctx.lineTo(0, r * 0.6);
+        ctx.lineTo(-r, 0);
+        ctx.lineTo(0, -r * 0.6);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
 
   // Particles
   for (const p of state.particles) {
@@ -474,10 +1031,40 @@ function draw() {
     ctx.restore();
   }
 
+  // Power-ups (world space, inside zoom)
+  for (const pu of state.powerups) {
+    const puAge = (elapsed - pu.born) / C.POWERUP_LIFETIME;
+    const puAlpha = puAge > 0.75 ? 0.7 * (1 - (puAge - 0.75) / 0.25) : 0.7;
+    const pulseScale = 1 + 0.2 * Math.sin(elapsed * 0.004);
+    const rotation = elapsed * 0.002;
+    const color = C.COLORS[POWERUP_COLOR_MAP[pu.type]];
+    const r = C.POWERUP_RADIUS * pulseScale;
+
+    ctx.save();
+    ctx.translate(pu.x, pu.y);
+    ctx.rotate(rotation);
+    ctx.globalAlpha = puAlpha;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(0, -r);
+    ctx.lineTo(r * 0.6, 0);
+    ctx.lineTo(0, r);
+    ctx.lineTo(-r * 0.6, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Restore zoom transform — HUD and overlays render in screen space
+  ctx.restore();
+
   // HUD
   if (
     state.phase === 'playing' ||
     state.phase === 'wave-break' ||
+    state.phase === 'wave-preview' ||
     state.phase === 'game-over'
   ) {
     const hudPad = 20;
@@ -506,12 +1093,47 @@ function draw() {
       ctx.fillText(`x${state.combo}`, state.width - hudPad, hudPad + 32);
     }
 
+    // Multi-kill flash
+    if (state.multiKill.timer > 0) {
+      const mkAlpha = state.multiKill.timer / 800;
+      ctx.save();
+      ctx.globalAlpha = mkAlpha;
+      ctx.fillStyle = C.COLORS.combo;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = `bold 24px ${hudFont}`;
+      ctx.fillText(state.multiKill.text, state.cx, state.cy + 60);
+      ctx.restore();
+    }
+
+    // Active power-up indicator bar (bottom-center)
+    if (state.activePower !== null) {
+      const barW = 80;
+      const barH = 6;
+      const barX = state.cx - barW / 2;
+      const barY = state.height - hudPad - barH;
+      const duration = C.POWERUP_DURATION[state.activePower.type];
+      const remaining = Math.max(0, state.activePower.until - elapsed);
+      const frac = remaining / duration;
+      const barColor = C.COLORS[POWERUP_COLOR_MAP[state.activePower.type]];
+
+      ctx.save();
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = barColor;
+      ctx.fillRect(barX, barY, barW, barH);
+      ctx.globalAlpha = 0.9;
+      ctx.fillRect(barX, barY, barW * frac, barH);
+      ctx.restore();
+    }
+
     ctx.restore();
   }
 
-  // Wave announcement
-  if (state.phase === 'wave-break') {
-    const alpha = Math.max(0, state.waveTimer / C.WAVE_BREAK);
+  // Wave announcement (visible during both wave-break and wave-preview)
+  if (state.phase === 'wave-break' || state.phase === 'wave-preview') {
+    const totalDuration =
+      state.phase === 'wave-break' ? C.WAVE_BREAK : C.WAVE_PREVIEW;
+    const alpha = Math.max(0, state.waveTimer / totalDuration);
     const waveFont = '"Avenir Next", "Segoe UI", sans-serif';
 
     ctx.save();
@@ -590,18 +1212,27 @@ function tick(now) {
   requestAnimationFrame(tick);
 }
 
-function startWave(n) {
-  state.wave = n;
-  const count = Math.floor(C.BASE_DRONES + n * C.DRONES_PER_WAVE);
-  const now = elapsed;
-  state.spawnQueue = [];
-  for (let i = 0; i < count; i++) {
-    state.spawnQueue.push(now + i * C.SPAWN_STAGGER);
+function pickDroneType(wave) {
+  const r = Math.random();
+  if (wave >= 10) {
+    if (r < 0.4) return 'basic';
+    if (r < 0.6) return 'wanderer';
+    if (r < 0.8) return 'shielded';
+    return 'splitter';
   }
+  if (wave >= 7) {
+    if (r < 0.5) return 'basic';
+    if (r < 0.75) return 'wanderer';
+    return 'shielded';
+  }
+  if (wave >= 4) {
+    if (r < 0.7) return 'basic';
+    return 'wanderer';
+  }
+  return 'basic';
 }
 
-function spawnDrone() {
-  const speed = C.DRONE_BASE_SPEED + state.wave * C.DRONE_SPEED_STEP;
+function pickSpawnPosition() {
   let angle = Math.random() * Math.PI * 2;
   let sx = state.cx + Math.cos(angle) * state.arenaRadius;
   let sy = state.cy + Math.sin(angle) * state.arenaRadius;
@@ -615,23 +1246,89 @@ function spawnDrone() {
     sy = state.cy + Math.sin(angle) * state.arenaRadius;
   }
 
+  return { x: sx, y: sy };
+}
+
+function planWave(n) {
+  const count = Math.floor(C.BASE_DRONES + n * C.DRONES_PER_WAVE);
+  const planned = [];
+  for (let i = 0; i < count; i++) {
+    const type = pickDroneType(n);
+    const pos = pickSpawnPosition();
+    planned.push({ x: pos.x, y: pos.y, type });
+  }
+  return planned;
+}
+
+function startWave(n) {
+  Sound.waveStart();
+  state.wave = n;
+  state.zoomTarget = Math.max(C.ZOOM_MIN, C.ZOOM_BASE - n * C.ZOOM_WAVE_STEP);
+  const now = elapsed;
+  state.spawnQueue = [];
+
+  if (state.previewDrones.length > 0) {
+    // Use pre-planned positions/types from the wave preview
+    for (let i = 0; i < state.previewDrones.length; i++) {
+      const pd = state.previewDrones[i];
+      state.spawnQueue.push({
+        time: now + i * C.SPAWN_STAGGER,
+        type: pd.type,
+        x: pd.x,
+        y: pd.y,
+      });
+    }
+    state.previewDrones = [];
+  } else {
+    // Fallback: generate fresh (shouldn't happen in normal flow)
+    const count = Math.floor(C.BASE_DRONES + n * C.DRONES_PER_WAVE);
+    for (let i = 0; i < count; i++) {
+      state.spawnQueue.push({
+        time: now + i * C.SPAWN_STAGGER,
+        type: pickDroneType(n),
+      });
+    }
+  }
+}
+
+function spawnDrone(type = 'basic', preX, preY) {
+  let speed = C.DRONE_BASE_SPEED + state.wave * C.DRONE_SPEED_STEP;
+  let sx;
+  let sy;
+
+  if (preX !== undefined && preY !== undefined) {
+    sx = preX;
+    sy = preY;
+  } else {
+    const pos = pickSpawnPosition();
+    sx = pos.x;
+    sy = pos.y;
+  }
+
+  if (type === 'mini') {
+    speed *= 1.5;
+  }
+
   const heading = Math.atan2(state.player.y - sy, state.player.x - sx);
-  state.drones.push({ x: sx, y: sy, speed, heading, alive: true });
+  const hp = type === 'shielded' ? 2 : 1;
+  state.drones.push({ x: sx, y: sy, speed, heading, alive: true, type, hp });
 }
 
 function startGame() {
   if (state.phase !== 'title') return;
-  state.phase = 'playing';
+  state.phase = 'wave-preview';
   state.player.x = state.cx;
   state.player.y = state.cy;
-  startWave(1);
+  state.previewDrones = planWave(1);
+  state.waveTimer = C.WAVE_PREVIEW;
 }
 
 function handleInput(x, y) {
   if (state.phase === 'title') {
     startGame();
   } else if (state.phase === 'playing') {
-    triggerDash(x, y);
+    const world = screenToWorld(x, y);
+    triggerDash(world.x, world.y);
   } else if (state.phase === 'game-over') {
     if (elapsed - state.gameOverAt < 500) return;
     resetGame();
