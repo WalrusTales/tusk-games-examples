@@ -751,14 +751,15 @@ function triggerDash(rawX, rawY) {
   if (state.phase !== 'playing' || state.player.cooldown > 0) return;
   Sound.dash();
   const clamped = clampToArena(rawX, rawY);
-  state.trails.push({
+  const dashTrail = {
     x1: state.player.x,
     y1: state.player.y,
     x2: clamped.x,
     y2: clamped.y,
     born: elapsed,
     progress: 0,
-  });
+  };
+  state.trails.push(dashTrail);
   // Double power-up: add a backward trail of the same length
   if (state.activePower && state.activePower.type === 'double') {
     const dx = state.player.x - clamped.x;
@@ -776,6 +777,7 @@ function triggerDash(rawX, rawY) {
   state.player.tx = clamped.x;
   state.player.ty = clamped.y;
   state.player.dashing = true;
+  state.player.dashTrail = dashTrail;
 }
 
 function resetGame() {
@@ -873,14 +875,15 @@ function update(dt) {
       state.player.y = state.player.ty;
       state.player.dashing = false;
       state.player.cooldown = C.DASH_COOLDOWN;
-      if (state.trails.length > 0) {
-        state.trails[state.trails.length - 1].progress = 1;
+      if (state.player.dashTrail) {
+        state.player.dashTrail.progress = 1;
+        state.player.dashTrail = null;
       }
     } else {
       state.player.x += (dx / dist) * move;
       state.player.y += (dy / dist) * move;
 
-      const trail = state.trails[state.trails.length - 1];
+      const trail = state.player.dashTrail;
       if (trail) {
         const totalLen = Math.hypot(trail.x2 - trail.x1, trail.y2 - trail.y1);
         if (totalLen > 0) {
@@ -915,16 +918,16 @@ function update(dt) {
     const trailHitDist = droneRadius(drone.type) + trailW;
     for (let ti = 0; ti < state.trails.length; ti++) {
       const trail = state.trails[ti];
+      if (drone.hitBy.has(trail)) continue;
+      const progress = trail.progress ?? 1;
+      // Only check the traveled portion of the trail
+      const ex = trail.x1 + (trail.x2 - trail.x1) * progress;
+      const ey = trail.y1 + (trail.y2 - trail.y1) * progress;
       if (
-        distToSegment(
-          drone.x,
-          drone.y,
-          trail.x1,
-          trail.y1,
-          trail.x2,
-          trail.y2,
-        ) <= trailHitDist
+        distToSegment(drone.x, drone.y, trail.x1, trail.y1, ex, ey) <=
+        trailHitDist
       ) {
+        drone.hitBy.add(trail);
         drone.hp -= 1;
         if (drone.hp > 0) {
           // Shielded drone survives — flash with fewer particles
@@ -961,6 +964,7 @@ function update(dt) {
                 alive: true,
                 type: 'mini',
                 hp: 1,
+                hitBy: new Set(),
               });
             }
           }
@@ -1061,6 +1065,8 @@ function update(dt) {
     state.wave > 0
   ) {
     state.score += state.wave * 10;
+    state.player.dashing = false;
+    state.player.cooldown = 0;
     state.phase = 'wave-break';
     state.waveTimer = C.WAVE_BREAK;
   }
@@ -1539,7 +1545,16 @@ function spawnDrone(type = 'basic', preX, preY) {
 
   const heading = Math.atan2(state.player.y - sy, state.player.x - sx);
   const hp = type === 'shielded' ? 2 : 1;
-  state.drones.push({ x: sx, y: sy, speed, heading, alive: true, type, hp });
+  state.drones.push({
+    x: sx,
+    y: sy,
+    speed,
+    heading,
+    alive: true,
+    type,
+    hp,
+    hitBy: new Set(),
+  });
 }
 
 function startGame() {
