@@ -45,6 +45,7 @@ const C = {
     powerDouble: '#34d399',
     powerExtend: '#fbbf24',
   },
+  FONT: '"Avenir Next", "Segoe UI", sans-serif',
 };
 
 function initState() {
@@ -113,151 +114,57 @@ const Sound = (() => {
     }
   }
 
-  function dash() {
-    play((a) => {
-      const osc = a.createOscillator();
-      const gain = a.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(200, a.currentTime);
-      osc.frequency.linearRampToValueAtTime(600, a.currentTime + 0.08);
-      gain.gain.setValueAtTime(0.15, a.currentTime);
-      gain.gain.linearRampToValueAtTime(0, a.currentTime + 0.08);
-      osc.connect(gain);
-      gain.connect(a.destination);
-      osc.start(a.currentTime);
-      osc.stop(a.currentTime + 0.1);
-    });
-  }
-
-  function hit() {
-    play((a) => {
-      const osc = a.createOscillator();
-      const gain = a.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(600, a.currentTime);
-      gain.gain.setValueAtTime(0.15, a.currentTime);
-      gain.gain.linearRampToValueAtTime(0, a.currentTime + 0.06);
-      osc.connect(gain);
-      gain.connect(a.destination);
-      osc.start(a.currentTime);
-      osc.stop(a.currentTime + 0.08);
-    });
-  }
-
-  function shieldGain() {
-    play((a) => {
-      const t = a.currentTime;
-      for (const [freq, start] of [
-        [400, 0],
-        [600, 0.08],
-      ]) {
-        const osc = a.createOscillator();
-        const gain = a.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, t + start);
-        osc.frequency.linearRampToValueAtTime(freq * 2, t + start + 0.06);
-        gain.gain.setValueAtTime(0.12, t + start);
-        gain.gain.linearRampToValueAtTime(0, t + start + 0.06);
-        osc.connect(gain);
-        gain.connect(a.destination);
-        osc.start(t + start);
-        osc.stop(t + start + 0.08);
-      }
-    });
-  }
-
-  function shieldBreak() {
-    play((a) => {
-      const osc = a.createOscillator();
-      const gain = a.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(120, a.currentTime);
-      gain.gain.setValueAtTime(0.2, a.currentTime);
-      gain.gain.linearRampToValueAtTime(0, a.currentTime + 0.2);
-      osc.connect(gain);
-      gain.connect(a.destination);
-      osc.start(a.currentTime);
-      osc.stop(a.currentTime + 0.22);
-    });
-  }
-
-  function gameOver() {
-    play((a) => {
-      const osc = a.createOscillator();
-      const gain = a.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(400, a.currentTime);
-      osc.frequency.linearRampToValueAtTime(100, a.currentTime + 0.5);
-      gain.gain.setValueAtTime(0.15, a.currentTime);
-      gain.gain.linearRampToValueAtTime(0, a.currentTime + 0.5);
-      osc.connect(gain);
-      gain.connect(a.destination);
-      osc.start(a.currentTime);
-      osc.stop(a.currentTime + 0.52);
-    });
-  }
-
-  function waveStart() {
-    play((a) => {
-      const osc = a.createOscillator();
-      const gain = a.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(660, a.currentTime);
-      gain.gain.setValueAtTime(0.1, a.currentTime);
-      gain.gain.linearRampToValueAtTime(0, a.currentTime + 0.12);
-      osc.connect(gain);
-      gain.connect(a.destination);
-      osc.start(a.currentTime);
-      osc.stop(a.currentTime + 0.14);
-    });
-  }
-
-  function multiKill() {
-    play((a) => {
-      const osc = a.createOscillator();
-      const gain = a.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(900, a.currentTime);
-      gain.gain.setValueAtTime(0.15, a.currentTime);
-      gain.gain.linearRampToValueAtTime(0, a.currentTime + 0.06);
-      osc.connect(gain);
-      gain.connect(a.destination);
-      osc.start(a.currentTime);
-      osc.stop(a.currentTime + 0.08);
-    });
-  }
-
-  function powerUp() {
-    play((a) => {
-      const t = a.currentTime;
-      for (const [freq, start] of [
-        [500, 0],
-        [700, 0.06],
-        [900, 0.12],
-      ]) {
-        const osc = a.createOscillator();
-        const gain = a.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(freq, t + start);
-        gain.gain.setValueAtTime(0.1, t + start);
-        gain.gain.linearRampToValueAtTime(0, t + start + 0.04);
-        osc.connect(gain);
-        gain.connect(a.destination);
-        osc.start(t + start);
-        osc.stop(t + start + 0.06);
-      }
-    });
+  function tone(
+    a,
+    { type = 'sine', freq, freqEnd, vol = 0.15, dur = 0.08, start = 0 } = {},
+  ) {
+    const t = a.currentTime + start;
+    const osc = a.createOscillator();
+    const gain = a.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (freqEnd !== undefined)
+      osc.frequency.linearRampToValueAtTime(freqEnd, t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.linearRampToValueAtTime(0, t + dur);
+    osc.connect(gain);
+    gain.connect(a.destination);
+    osc.start(t);
+    osc.stop(t + dur + 0.02);
   }
 
   return {
-    dash,
-    hit,
-    shieldGain,
-    shieldBreak,
-    gameOver,
-    waveStart,
-    multiKill,
-    powerUp,
+    dash: () => play((a) => tone(a, { freq: 200, freqEnd: 600, dur: 0.08 })),
+    hit: () => play((a) => tone(a, { type: 'triangle', freq: 600, dur: 0.06 })),
+    shieldGain: () =>
+      play((a) => {
+        tone(a, { freq: 400, freqEnd: 800, vol: 0.12, dur: 0.06 });
+        tone(a, {
+          freq: 600,
+          freqEnd: 1200,
+          vol: 0.12,
+          dur: 0.06,
+          start: 0.08,
+        });
+      }),
+    shieldBreak: () => play((a) => tone(a, { freq: 120, vol: 0.2, dur: 0.2 })),
+    gameOver: () => play((a) => tone(a, { freq: 400, freqEnd: 100, dur: 0.5 })),
+    waveStart: () =>
+      play((a) =>
+        tone(a, { type: 'triangle', freq: 660, vol: 0.1, dur: 0.12 }),
+      ),
+    multiKill: () =>
+      play((a) => tone(a, { type: 'triangle', freq: 900, dur: 0.06 })),
+    powerUp: () =>
+      play((a) => {
+        for (const [freq, start] of [
+          [500, 0],
+          [700, 0.06],
+          [900, 0.12],
+        ]) {
+          tone(a, { type: 'triangle', freq, vol: 0.1, dur: 0.04, start });
+        }
+      }),
   };
 })();
 
@@ -268,12 +175,45 @@ const ctx = canvas.getContext(
 
 const state = initState();
 const POWERUP_TYPES = ['wide', 'slow', 'double', 'extend'];
-const POWERUP_COLOR_MAP = {
-  wide: 'powerWide',
-  slow: 'powerSlow',
-  double: 'powerDouble',
-  extend: 'powerExtend',
+const POWERUP_COLORS = {
+  wide: C.COLORS.powerWide,
+  slow: C.COLORS.powerSlow,
+  double: C.COLORS.powerDouble,
+  extend: C.COLORS.powerExtend,
 };
+
+function droneRadius(type) {
+  if (type === 'wanderer') return C.DRONE_RADIUS * 1.2;
+  if (type === 'splitter') return C.DRONE_RADIUS * 1.3;
+  if (type === 'mini') return C.DRONE_RADIUS * 0.6;
+  return C.DRONE_RADIUS;
+}
+
+function droneColor(type) {
+  if (type === 'wanderer') return C.COLORS.droneWanderer;
+  if (type === 'shielded') return C.COLORS.droneShielded;
+  if (type === 'splitter' || type === 'mini') return C.COLORS.droneSplitter;
+  return C.COLORS.drone;
+}
+
+function drawDiamond(r) {
+  ctx.beginPath();
+  ctx.moveTo(r, 0);
+  ctx.lineTo(0, r * 0.6);
+  ctx.lineTo(-r, 0);
+  ctx.lineTo(0, -r * 0.6);
+  ctx.closePath();
+}
+
+function effectiveTrailLife() {
+  return state.activePower?.type === 'extend'
+    ? C.TRAIL_DURATION * 2
+    : C.TRAIL_DURATION;
+}
+
+function effectiveTrailWidth() {
+  return state.activePower?.type === 'wide' ? C.TRAIL_WIDTH * 2 : C.TRAIL_WIDTH;
+}
 let elapsed = 0;
 let lastTime = 0;
 let cursorX = 0;
@@ -433,11 +373,7 @@ function update(dt) {
     state.multiKill.timer = Math.max(0, state.multiKill.timer - dt);
   }
 
-  // Remove expired trails
-  const trailLife =
-    state.activePower && state.activePower.type === 'extend'
-      ? C.TRAIL_DURATION * 2
-      : C.TRAIL_DURATION;
+  const trailLife = effectiveTrailLife();
   state.trails = state.trails.filter((t) => elapsed - t.born < trailLife);
 
   // Wave-break countdown → transition to wave-preview
@@ -463,22 +399,14 @@ function update(dt) {
 
   if (state.phase !== 'playing') return;
 
-  // Expire old power-ups
-  state.powerups = state.powerups.filter(
-    (p) => elapsed - p.born <= C.POWERUP_LIFETIME,
-  );
-
-  // Expire active power
   if (state.activePower !== null && elapsed >= state.activePower.until) {
     state.activePower = null;
   }
 
-  // Collect power-ups
   const collectDist = C.PLAYER_RADIUS + C.POWERUP_RADIUS;
   state.powerups = state.powerups.filter((p) => {
-    const dx = state.player.x - p.x;
-    const dy = state.player.y - p.y;
-    if (Math.sqrt(dx * dx + dy * dy) <= collectDist) {
+    if (elapsed - p.born > C.POWERUP_LIFETIME) return false;
+    if (Math.hypot(state.player.x - p.x, state.player.y - p.y) <= collectDist) {
       state.activePower = {
         type: p.type,
         until: elapsed + C.POWERUP_DURATION[p.type],
@@ -494,13 +422,13 @@ function update(dt) {
     state.player.cooldown = Math.max(0, state.player.cooldown - dt);
   }
 
-  // Dash movement
   if (state.player.dashing) {
     const dx = state.player.tx - state.player.x;
     const dy = state.player.ty - state.player.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
+    const dist = Math.hypot(dx, dy);
+    const move = (C.DASH_SPEED * dt) / 1000;
 
-    if (dist < 2) {
+    if (dist < 2 || move >= dist) {
       state.player.x = state.player.tx;
       state.player.y = state.player.ty;
       state.player.dashing = false;
@@ -509,34 +437,21 @@ function update(dt) {
         state.trails[state.trails.length - 1].progress = 1;
       }
     } else {
-      const move = (C.DASH_SPEED * dt) / 1000;
-      if (move >= dist) {
-        state.player.x = state.player.tx;
-        state.player.y = state.player.ty;
-        state.player.dashing = false;
-        state.player.cooldown = C.DASH_COOLDOWN;
-        if (state.trails.length > 0) {
-          state.trails[state.trails.length - 1].progress = 1;
-        }
-      } else {
-        state.player.x += (dx / dist) * move;
-        state.player.y += (dy / dist) * move;
-      }
-    }
+      state.player.x += (dx / dist) * move;
+      state.player.y += (dy / dist) * move;
 
-    // Update draw-in progress for the current dash trail
-    if (state.player.dashing && state.trails.length > 0) {
       const trail = state.trails[state.trails.length - 1];
-      const tdx = trail.x2 - trail.x1;
-      const tdy = trail.y2 - trail.y1;
-      const totalLen = Math.sqrt(tdx * tdx + tdy * tdy);
-      if (totalLen > 0) {
-        const traveled = Math.sqrt(
-          (state.player.x - trail.x1) ** 2 + (state.player.y - trail.y1) ** 2,
-        );
-        trail.progress = Math.min(1, Math.max(0, traveled / totalLen));
-      } else {
-        trail.progress = 1;
+      if (trail) {
+        const totalLen = Math.hypot(trail.x2 - trail.x1, trail.y2 - trail.y1);
+        if (totalLen > 0) {
+          const traveled = Math.hypot(
+            state.player.x - trail.x1,
+            state.player.y - trail.y1,
+          );
+          trail.progress = Math.min(1, traveled / totalLen);
+        } else {
+          trail.progress = 1;
+        }
       }
     }
   }
@@ -552,24 +467,12 @@ function update(dt) {
   }
   state.spawnQueue = pending;
 
-  // Trail-drone collision
   const killsByTrail = new Map();
   const newMinis = [];
+  const trailW = effectiveTrailWidth();
   for (const drone of state.drones) {
     if (!drone.alive) continue;
-    const droneR =
-      drone.type === 'wanderer'
-        ? C.DRONE_RADIUS * 1.2
-        : drone.type === 'splitter'
-          ? C.DRONE_RADIUS * 1.3
-          : drone.type === 'mini'
-            ? C.DRONE_RADIUS * 0.6
-            : C.DRONE_RADIUS;
-    const trailW =
-      state.activePower && state.activePower.type === 'wide'
-        ? C.TRAIL_WIDTH * 2
-        : C.TRAIL_WIDTH;
-    const trailHitDist = droneR + trailW;
+    const trailHitDist = droneRadius(drone.type) + trailW;
     for (let ti = 0; ti < state.trails.length; ti++) {
       const trail = state.trails[ti];
       if (
@@ -588,17 +491,9 @@ function update(dt) {
           spawnParticles(drone.x, drone.y, C.COLORS.droneShielded, 4);
           state.shake = 4;
         } else {
-          const droneColor =
-            drone.type === 'wanderer'
-              ? C.COLORS.droneWanderer
-              : drone.type === 'shielded'
-                ? C.COLORS.droneShielded
-                : drone.type === 'splitter' || drone.type === 'mini'
-                  ? C.COLORS.droneSplitter
-                  : C.COLORS.drone;
           drone.alive = false;
           Sound.hit();
-          spawnParticles(drone.x, drone.y, droneColor, 8);
+          spawnParticles(drone.x, drone.y, droneColor(drone.type), 8);
           state.combo += 1;
           state.score += 1 + state.combo;
           if (state.combo >= C.COMBO_SHIELD && !state.hasShield) {
@@ -661,11 +556,9 @@ function update(dt) {
     }
   }
 
-  // Move drones toward player (heading-based steering)
-  for (const drone of state.drones) {
-    if (!drone.alive) continue;
+  state.drones = state.drones.filter((d) => d.alive);
 
-    // Wanderer drift: add random heading jitter before steering
+  for (const drone of state.drones) {
     if (drone.type === 'wanderer') {
       drone.heading += (Math.random() - 0.5) * C.WANDERER_DRIFT * (dt / 1000);
     }
@@ -698,22 +591,12 @@ function update(dt) {
     drone.y += Math.sin(drone.heading) * move;
   }
 
-  // Drone-player collision
   for (const drone of state.drones) {
-    if (!drone.alive) continue;
-    const droneR =
-      drone.type === 'wanderer'
-        ? C.DRONE_RADIUS * 1.2
-        : drone.type === 'splitter'
-          ? C.DRONE_RADIUS * 1.3
-          : drone.type === 'mini'
-            ? C.DRONE_RADIUS * 0.6
-            : C.DRONE_RADIUS;
-    const collisionDist = C.PLAYER_RADIUS + droneR;
-    const dx = state.player.x - drone.x;
-    const dy = state.player.y - drone.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist <= collisionDist) {
+    const collisionDist = C.PLAYER_RADIUS + droneRadius(drone.type);
+    if (
+      Math.hypot(state.player.x - drone.x, state.player.y - drone.y) <=
+      collisionDist
+    ) {
       drone.alive = false;
       if (state.hasShield) {
         state.hasShield = false;
@@ -730,13 +613,13 @@ function update(dt) {
     }
   }
 
-  // Wave completion check
+  state.drones = state.drones.filter((d) => d.alive);
+
   if (
     state.spawnQueue.length === 0 &&
-    state.drones.length > 0 &&
-    state.drones.every((d) => !d.alive)
+    state.drones.length === 0 &&
+    state.wave > 0
   ) {
-    state.drones = [];
     state.score += state.wave * 10;
     state.phase = 'wave-break';
     state.waveTimer = C.WAVE_BREAK;
@@ -774,14 +657,8 @@ function draw() {
   ctx.save();
   ctx.lineCap = 'round';
   ctx.shadowColor = C.COLORS.trail;
-  const drawTrailLife =
-    state.activePower && state.activePower.type === 'extend'
-      ? C.TRAIL_DURATION * 2
-      : C.TRAIL_DURATION;
-  const drawTrailW =
-    state.activePower && state.activePower.type === 'wide'
-      ? C.TRAIL_WIDTH * 2
-      : C.TRAIL_WIDTH;
+  const drawTrailLife = effectiveTrailLife();
+  const drawTrailW = effectiveTrailWidth();
   for (const trail of state.trails) {
     const age = (elapsed - trail.born) / drawTrailLife;
     const alpha = 1 - age;
@@ -822,147 +699,61 @@ function draw() {
   }
   ctx.restore();
 
-  // Drones
   ctx.save();
   ctx.shadowBlur = 6;
   for (const drone of state.drones) {
     if (!drone.alive) continue;
-    const angle = drone.heading;
+    const r = droneRadius(drone.type);
+    const color = droneColor(drone.type);
+    const glow = drone.type === 'basic' ? C.COLORS.droneGlow : color;
+
+    ctx.shadowColor = glow;
+    ctx.fillStyle = color;
 
     if (drone.type === 'wanderer') {
-      // Circle shape, red color
-      const r = C.DRONE_RADIUS * 1.2;
-      ctx.shadowColor = C.COLORS.droneWanderer;
-      ctx.fillStyle = C.COLORS.droneWanderer;
       ctx.beginPath();
       ctx.arc(drone.x, drone.y, r, 0, Math.PI * 2);
       ctx.fill();
-    } else if (drone.type === 'shielded') {
-      // Diamond shape, purple color + optional shield ring
-      const r = C.DRONE_RADIUS;
-      ctx.shadowColor = C.COLORS.droneShielded;
-      ctx.fillStyle = C.COLORS.droneShielded;
-      ctx.save();
-      ctx.translate(drone.x, drone.y);
-      ctx.rotate(angle);
-      ctx.beginPath();
-      ctx.moveTo(r, 0);
-      ctx.lineTo(0, r * 0.6);
-      ctx.lineTo(-r, 0);
-      ctx.lineTo(0, -r * 0.6);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-      // Shield ring when hp=2
-      if (drone.hp === 2) {
-        ctx.save();
-        ctx.strokeStyle = C.COLORS.droneShielded;
-        ctx.globalAlpha = 0.4 + 0.2 * Math.sin(elapsed * 0.005);
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.arc(drone.x, drone.y, r + 4, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-        ctx.restore();
-      }
-    } else if (drone.type === 'splitter') {
-      // Slightly larger diamond, orange color
-      const r = C.DRONE_RADIUS * 1.3;
-      ctx.shadowColor = C.COLORS.droneSplitter;
-      ctx.fillStyle = C.COLORS.droneSplitter;
-      ctx.save();
-      ctx.translate(drone.x, drone.y);
-      ctx.rotate(angle);
-      ctx.beginPath();
-      ctx.moveTo(r, 0);
-      ctx.lineTo(0, r * 0.6);
-      ctx.lineTo(-r, 0);
-      ctx.lineTo(0, -r * 0.6);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-    } else if (drone.type === 'mini') {
-      // Small diamond, orange color
-      const r = C.DRONE_RADIUS * 0.6;
-      ctx.shadowColor = C.COLORS.droneSplitter;
-      ctx.fillStyle = C.COLORS.droneSplitter;
-      ctx.save();
-      ctx.translate(drone.x, drone.y);
-      ctx.rotate(angle);
-      ctx.beginPath();
-      ctx.moveTo(r, 0);
-      ctx.lineTo(0, r * 0.6);
-      ctx.lineTo(-r, 0);
-      ctx.lineTo(0, -r * 0.6);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
     } else {
-      // Basic: diamond shape, amber color (original)
-      const r = C.DRONE_RADIUS;
-      ctx.shadowColor = C.COLORS.droneGlow;
-      ctx.fillStyle = C.COLORS.drone;
       ctx.save();
       ctx.translate(drone.x, drone.y);
-      ctx.rotate(angle);
-      ctx.beginPath();
-      ctx.moveTo(r, 0);
-      ctx.lineTo(0, r * 0.6);
-      ctx.lineTo(-r, 0);
-      ctx.lineTo(0, -r * 0.6);
-      ctx.closePath();
+      ctx.rotate(drone.heading);
+      drawDiamond(r);
       ctx.fill();
+      ctx.restore();
+    }
+
+    if (drone.type === 'shielded' && drone.hp === 2) {
+      ctx.save();
+      ctx.strokeStyle = C.COLORS.droneShielded;
+      ctx.globalAlpha = 0.4 + 0.2 * Math.sin(elapsed * 0.005);
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(drone.x, drone.y, r + 4, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
       ctx.restore();
     }
   }
   ctx.restore();
 
-  // Preview drones (pulsing outlines during wave-preview phase)
   if (state.phase === 'wave-preview' && state.previewDrones.length > 0) {
     const pulseAlpha = 0.15 + 0.15 * Math.sin(elapsed * 0.008);
     ctx.save();
     ctx.lineWidth = 1.5;
     for (const pd of state.previewDrones) {
-      let color;
-      if (pd.type === 'wanderer') {
-        color = C.COLORS.droneWanderer;
-      } else if (pd.type === 'shielded') {
-        color = C.COLORS.droneShielded;
-      } else if (pd.type === 'splitter') {
-        color = C.COLORS.droneSplitter;
-      } else {
-        color = C.COLORS.drone;
-      }
-      ctx.strokeStyle = color;
+      const r = droneRadius(pd.type);
+      ctx.strokeStyle = droneColor(pd.type);
       ctx.globalAlpha = pulseAlpha;
 
       if (pd.type === 'wanderer') {
-        const r = C.DRONE_RADIUS * 1.2;
         ctx.beginPath();
         ctx.arc(pd.x, pd.y, r, 0, Math.PI * 2);
         ctx.stroke();
-      } else if (pd.type === 'splitter') {
-        const r = C.DRONE_RADIUS * 1.3;
-        ctx.save();
-        ctx.translate(pd.x, pd.y);
-        ctx.beginPath();
-        ctx.moveTo(r, 0);
-        ctx.lineTo(0, r * 0.6);
-        ctx.lineTo(-r, 0);
-        ctx.lineTo(0, -r * 0.6);
-        ctx.closePath();
-        ctx.stroke();
-        ctx.restore();
       } else {
-        const r = C.DRONE_RADIUS;
         ctx.save();
         ctx.translate(pd.x, pd.y);
-        ctx.beginPath();
-        ctx.moveTo(r, 0);
-        ctx.lineTo(0, r * 0.6);
-        ctx.lineTo(-r, 0);
-        ctx.lineTo(0, -r * 0.6);
-        ctx.closePath();
+        drawDiamond(r);
         ctx.stroke();
         ctx.restore();
       }
@@ -1037,7 +828,7 @@ function draw() {
     const puAlpha = puAge > 0.75 ? 0.7 * (1 - (puAge - 0.75) / 0.25) : 0.7;
     const pulseScale = 1 + 0.2 * Math.sin(elapsed * 0.004);
     const rotation = elapsed * 0.002;
-    const color = C.COLORS[POWERUP_COLOR_MAP[pu.type]];
+    const color = POWERUP_COLORS[pu.type];
     const r = C.POWERUP_RADIUS * pulseScale;
 
     ctx.save();
@@ -1068,7 +859,6 @@ function draw() {
     state.phase === 'game-over'
   ) {
     const hudPad = 20;
-    const hudFont = '"Avenir Next", "Segoe UI", sans-serif';
 
     ctx.save();
     ctx.fillStyle = C.COLORS.hud;
@@ -1076,20 +866,20 @@ function draw() {
     // Wave label — top-left
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    ctx.font = `bold 11px ${hudFont}`;
+    ctx.font = `bold 11px ${C.FONT}`;
     ctx.fillText('WAVE', hudPad, hudPad);
-    ctx.font = `bold 28px ${hudFont}`;
+    ctx.font = `bold 28px ${C.FONT}`;
     ctx.fillText(String(state.wave), hudPad, hudPad + 14);
 
     // Score — top-right
     ctx.textAlign = 'right';
-    ctx.font = `bold 28px ${hudFont}`;
+    ctx.font = `bold 28px ${C.FONT}`;
     ctx.fillText(String(state.score), state.width - hudPad, hudPad);
 
     // Combo indicator
     if (state.combo > 0) {
       ctx.fillStyle = C.COLORS.combo;
-      ctx.font = `bold 18px ${hudFont}`;
+      ctx.font = `bold 18px ${C.FONT}`;
       ctx.fillText(`x${state.combo}`, state.width - hudPad, hudPad + 32);
     }
 
@@ -1101,7 +891,7 @@ function draw() {
       ctx.fillStyle = C.COLORS.combo;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.font = `bold 24px ${hudFont}`;
+      ctx.font = `bold 24px ${C.FONT}`;
       ctx.fillText(state.multiKill.text, state.cx, state.cy + 60);
       ctx.restore();
     }
@@ -1115,7 +905,7 @@ function draw() {
       const duration = C.POWERUP_DURATION[state.activePower.type];
       const remaining = Math.max(0, state.activePower.until - elapsed);
       const frac = remaining / duration;
-      const barColor = C.COLORS[POWERUP_COLOR_MAP[state.activePower.type]];
+      const barColor = POWERUP_COLORS[state.activePower.type];
 
       ctx.save();
       ctx.globalAlpha = 0.3;
@@ -1134,13 +924,12 @@ function draw() {
     const totalDuration =
       state.phase === 'wave-break' ? C.WAVE_BREAK : C.WAVE_PREVIEW;
     const alpha = Math.max(0, state.waveTimer / totalDuration);
-    const waveFont = '"Avenir Next", "Segoe UI", sans-serif';
 
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = `bold 40px ${waveFont}`;
+    ctx.font = `bold 40px ${C.FONT}`;
     ctx.fillStyle = C.COLORS.player;
     ctx.shadowColor = C.COLORS.playerGlow;
     ctx.shadowBlur = 20;
@@ -1150,14 +939,12 @@ function draw() {
 
   // Game over screen
   if (state.phase === 'game-over') {
-    const goFont = '"Avenir Next", "Segoe UI", sans-serif';
-
     ctx.save();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
     // "GAME OVER"
-    ctx.font = `bold 48px ${goFont}`;
+    ctx.font = `bold 48px ${C.FONT}`;
     ctx.fillStyle = C.COLORS.player;
     ctx.shadowColor = C.COLORS.playerGlow;
     ctx.shadowBlur = 24;
@@ -1165,14 +952,14 @@ function draw() {
 
     // Score + wave info
     ctx.shadowBlur = 0;
-    ctx.font = `bold 24px ${goFont}`;
+    ctx.font = `bold 24px ${C.FONT}`;
     ctx.fillStyle = C.COLORS.hud;
     ctx.fillText(`Score: ${state.score}`, state.cx, state.cy + 10);
-    ctx.font = `20px ${goFont}`;
+    ctx.font = `20px ${C.FONT}`;
     ctx.fillText(`Wave ${state.wave}`, state.cx, state.cy + 44);
 
     // Retry prompt
-    ctx.font = `18px ${goFont}`;
+    ctx.font = `18px ${C.FONT}`;
     ctx.fillStyle = C.COLORS.hud;
     ctx.fillText('Click to retry', state.cx, state.cy + 90);
 
@@ -1185,14 +972,14 @@ function draw() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    ctx.font = 'bold 48px "Avenir Next", "Segoe UI", sans-serif';
+    ctx.font = `bold 48px ${C.FONT}`;
     ctx.fillStyle = C.COLORS.player;
     ctx.shadowColor = C.COLORS.playerGlow;
     ctx.shadowBlur = 20;
     ctx.fillText('LOOP LANCER', state.cx, state.cy - 60);
 
     ctx.shadowBlur = 0;
-    ctx.font = '18px "Avenir Next", "Segoe UI", sans-serif';
+    ctx.font = `18px ${C.FONT}`;
     ctx.fillStyle = C.COLORS.hud;
     ctx.fillText('Click to start', state.cx, state.cy + 10);
     ctx.restore();
