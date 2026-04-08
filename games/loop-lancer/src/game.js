@@ -281,20 +281,43 @@ const Music = (() => {
   function scheduleKick(time) {
     if (beatCount % 4 !== 0) return;
     const a = getCtx();
+
+    // Body: sine with long 808-style pitch sweep and sub tail
     const osc = a.createOscillator();
     const gain = a.createGain();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(150 + waveIntensity * 30, time);
-    osc.frequency.exponentialRampToValueAtTime(40, time + 0.08);
+    osc.frequency.setValueAtTime(200 + waveIntensity * 40, time);
+    osc.frequency.exponentialRampToValueAtTime(45, time + 0.12);
     gain.gain.setValueAtTime(1, time);
-    gain.gain.exponentialRampToValueAtTime(0.01, time + 0.15);
+    gain.gain.setValueAtTime(0.8, time + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.01, time + 0.4);
     osc.connect(gain);
     gain.connect(layers.kick);
     osc.start(time);
-    osc.stop(time + 0.15);
+    osc.stop(time + 0.4);
     osc.onended = () => {
       osc.disconnect();
       gain.disconnect();
+    };
+
+    // Click transient: short noise burst for attack
+    const click = a.createBufferSource();
+    click.buffer = getNoiseBuffer();
+    const clickGain = a.createGain();
+    clickGain.gain.setValueAtTime(0.6, time);
+    clickGain.gain.exponentialRampToValueAtTime(0.01, time + 0.015);
+    const clickFilter = a.createBiquadFilter();
+    clickFilter.type = 'highpass';
+    clickFilter.frequency.value = 800;
+    click.connect(clickFilter);
+    clickFilter.connect(clickGain);
+    clickGain.connect(layers.kick);
+    click.start(time);
+    click.stop(time + 0.02);
+    click.onended = () => {
+      click.disconnect();
+      clickFilter.disconnect();
+      clickGain.disconnect();
     };
   }
 
@@ -534,22 +557,22 @@ const Music = (() => {
     );
 
     const phase = gameState.phase;
-    const isBreak =
-      phase === 'wave-break' ||
-      phase === 'wave-preview' ||
-      phase === 'game-over';
-    const breakMul = isBreak ? 0.2 : 1;
+    const isBreak = phase === 'wave-break' || phase === 'wave-preview';
+    const isDead = phase === 'game-over';
+    const breakMul = isDead || isBreak ? 0 : 1;
     const now = a.currentTime;
 
+    // Sub and kick keep going during wave breaks, fade on death
+    const coreMul = isDead ? 0 : 1;
     layers.sub.gain.setTargetAtTime(
-      (0.25 + waveIntensity * 0.15) * (isBreak ? 0.6 : 1),
+      (0.25 + waveIntensity * 0.15) * coreMul,
       now,
-      tc,
+      isDead ? 0.4 : tc,
     );
     layers.kick.gain.setTargetAtTime(
-      (0.3 + waveIntensity * 0.1) * breakMul,
+      (0.3 + waveIntensity * 0.1) * coreMul,
       now,
-      tc,
+      isDead ? 0.4 : tc,
     );
     layers.hihat.gain.setTargetAtTime(
       currentWave >= 2 ? (0.08 + waveIntensity * 0.07) * breakMul : 0,
@@ -563,13 +586,13 @@ const Music = (() => {
     );
     layers.arp.gain.setTargetAtTime(
       currentWave >= 5
-        ? (0.06 + Math.min(currentCombo, 5) * 0.02) * breakMul
+        ? (0.03 + Math.min(currentCombo, 5) * 0.01) * breakMul
         : 0,
       now,
       tc,
     );
     layers.lead.gain.setTargetAtTime(
-      currentWave >= 7 ? proximityFactor * (0.1 + waveIntensity * 0.1) : 0,
+      currentWave >= 7 ? proximityFactor * (0.02 + waveIntensity * 0.02) : 0,
       now,
       tc,
     );
