@@ -177,7 +177,7 @@ const Music = (() => {
 
   // Musical constants
   const KEY = 55; // A1 in Hz — root note
-  // Minor scale ratios: root, minor 2nd (unused), minor 3rd, perfect 4th, perfect 5th, minor 6th, minor 7th
+  // Scale ratios: root, major 2nd, minor 3rd, perfect 4th, perfect 5th, minor 6th, minor 7th
   const SCALE = [1, 9 / 8, 6 / 5, 4 / 3, 3 / 2, 8 / 5, 9 / 5];
   const LOOKAHEAD = 0.1; // seconds to schedule ahead
   const SCHEDULE_INTERVAL = 25; // ms between scheduler ticks
@@ -186,7 +186,7 @@ const Music = (() => {
   let bpm = 110;
   let beatDur = 60 / bpm; // seconds per beat
   let nextBeatTime = 0;
-  let _beatCount = 0;
+  let beatCount = 0;
 
   // Reactive state (smoothed each frame)
   let currentWave = 0;
@@ -218,7 +218,7 @@ const Music = (() => {
     return actx;
   }
 
-  function _note(scale, octave = 0) {
+  function note(scale, octave = 0) {
     return KEY * SCALE[scale % SCALE.length] * 2 ** octave;
   }
 
@@ -239,7 +239,7 @@ const Music = (() => {
       scheduleHihat(nextBeatTime);
       scheduleBass(nextBeatTime);
       scheduleArp(nextBeatTime);
-      _beatCount++;
+      beatCount++;
       nextBeatTime += beatDur / 4; // schedule at sixteenth-note resolution
     }
   }
@@ -255,7 +255,7 @@ const Music = (() => {
     bpm = 110;
     beatDur = 60 / bpm;
     nextBeatTime = a.currentTime + 0.05;
-    _beatCount = 0;
+    beatCount = 0;
     masterGain.gain.setValueAtTime(0.6, a.currentTime);
     schedulerId = setInterval(schedulerTick, SCHEDULE_INTERVAL);
   }
@@ -267,12 +267,12 @@ const Music = (() => {
       schedulerId = null;
     }
     if (actx) {
-      masterGain.gain.linearRampToValueAtTime(0, actx.currentTime + 0.3);
+      masterGain.gain.setTargetAtTime(0, actx.currentTime, 0.1);
     }
-    _beatCount = 0;
+    beatCount = 0;
   }
 
-  function update(gameState, _el) {
+  function update(gameState) {
     if (!running) return;
     const a = getCtx();
 
@@ -306,45 +306,55 @@ const Music = (() => {
     // Master filter: 22kHz when safe, drops to 800Hz when drones are close
     const filterTarget =
       22050 - proximityFactor * 21250 * (0.3 + waveIntensity * 0.7);
-    masterFilter.frequency.linearRampToValueAtTime(
+    const tc = 0.05; // time constant for smooth transitions
+    masterFilter.frequency.setTargetAtTime(
       Math.max(800, filterTarget),
-      a.currentTime + 0.05,
+      a.currentTime,
+      tc,
     );
 
-    // Layer volumes based on wave and phase
-    const t = a.currentTime + 0.05;
     const phase = gameState.phase;
-    const isBreak = phase === 'wave-break' || phase === 'wave-preview';
+    const isBreak =
+      phase === 'wave-break' ||
+      phase === 'wave-preview' ||
+      phase === 'game-over';
     const breakMul = isBreak ? 0.2 : 1;
+    const now = a.currentTime;
 
-    layers.sub.gain.linearRampToValueAtTime(
+    layers.sub.gain.setTargetAtTime(
       (0.25 + waveIntensity * 0.15) * (isBreak ? 0.6 : 1),
-      t,
+      now,
+      tc,
     );
-    layers.kick.gain.linearRampToValueAtTime(
+    layers.kick.gain.setTargetAtTime(
       (0.3 + waveIntensity * 0.1) * breakMul,
-      t,
+      now,
+      tc,
     );
-    layers.hihat.gain.linearRampToValueAtTime(
+    layers.hihat.gain.setTargetAtTime(
       currentWave >= 2 ? (0.08 + waveIntensity * 0.07) * breakMul : 0,
-      t,
+      now,
+      tc,
     );
-    layers.bass.gain.linearRampToValueAtTime(
+    layers.bass.gain.setTargetAtTime(
       currentWave >= 3 ? (0.15 + waveIntensity * 0.1) * breakMul : 0,
-      t,
+      now,
+      tc,
     );
-    layers.arp.gain.linearRampToValueAtTime(
+    layers.arp.gain.setTargetAtTime(
       currentWave >= 5
         ? (0.06 + Math.min(currentCombo, 5) * 0.02) * breakMul
         : 0,
-      t,
+      now,
+      tc,
     );
-    layers.lead.gain.linearRampToValueAtTime(
+    layers.lead.gain.setTargetAtTime(
       currentWave >= 7 ? proximityFactor * (0.1 + waveIntensity * 0.1) : 0,
-      t,
+      now,
+      tc,
     );
 
-    updateLead(a, t);
+    updateLead(a);
   }
 
   return { start, stop, update };
@@ -1177,7 +1187,7 @@ function tick(now) {
   lastTime = now;
 
   update(dt);
-  Music.update(state, elapsed);
+  Music.update(state);
   draw();
 
   requestAnimationFrame(tick);
