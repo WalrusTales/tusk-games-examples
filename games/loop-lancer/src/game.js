@@ -292,6 +292,10 @@ const Music = (() => {
     gain.connect(layers.kick);
     osc.start(time);
     osc.stop(time + 0.15);
+    osc.onended = () => {
+      osc.disconnect();
+      gain.disconnect();
+    };
   }
 
   function scheduleHihat(time) {
@@ -302,19 +306,24 @@ const Music = (() => {
     const a = getCtx();
     const src = a.createBufferSource();
     src.buffer = getNoiseBuffer();
-    const bandpass = a.createBiquadFilter();
-    bandpass.type = 'highpass';
-    bandpass.frequency.value = 7000 + waveIntensity * 3000;
+    const highpass = a.createBiquadFilter();
+    highpass.type = 'highpass';
+    highpass.frequency.value = 7000 + waveIntensity * 3000;
     const gain = a.createGain();
     const isEighth = beatCount % 2 === 0;
     const vol = isEighth ? 1 : 0.5 + waveIntensity * 0.3;
     gain.gain.setValueAtTime(vol, time);
     gain.gain.exponentialRampToValueAtTime(0.01, time + 0.03);
-    src.connect(bandpass);
-    bandpass.connect(gain);
+    src.connect(highpass);
+    highpass.connect(gain);
     gain.connect(layers.hihat);
     src.start(time);
     src.stop(time + 0.04);
+    src.onended = () => {
+      src.disconnect();
+      highpass.disconnect();
+      gain.disconnect();
+    };
   }
 
   function scheduleBass(time) {
@@ -345,6 +354,11 @@ const Music = (() => {
     gain.connect(layers.bass);
     osc.start(time);
     osc.stop(time + dur + 0.01);
+    osc.onended = () => {
+      osc.disconnect();
+      filter.disconnect();
+      gain.disconnect();
+    };
   }
 
   function scheduleArp(time) {
@@ -375,6 +389,11 @@ const Music = (() => {
     gain.connect(layers.arp);
     osc.start(time);
     osc.stop(time + dur + 0.01);
+    osc.onended = () => {
+      osc.disconnect();
+      filter.disconnect();
+      gain.disconnect();
+    };
   }
 
   function updateLead(a) {
@@ -382,6 +401,8 @@ const Music = (() => {
       if (leadOscs) {
         leadOscs[0].stop(a.currentTime + 0.05);
         leadOscs[1].stop(a.currentTime + 0.05);
+        leadOscs[0].disconnect();
+        leadOscs[1].disconnect();
         leadOscs = null;
       }
       return;
@@ -449,9 +470,26 @@ const Music = (() => {
       schedulerId = null;
     }
     if (actx) {
+      const t = actx.currentTime + 0.3;
       masterGain.gain.setTargetAtTime(0, actx.currentTime, 0.1);
+      if (subOsc) {
+        subOsc.stop(t);
+        subOsc._harm.stop(t);
+        subOsc._harm.disconnect();
+        subOsc._harmGain.disconnect();
+        subOsc.disconnect();
+        subOsc = null;
+      }
+      if (leadOscs) {
+        leadOscs[0].stop(t);
+        leadOscs[1].stop(t);
+        leadOscs[0].disconnect();
+        leadOscs[1].disconnect();
+        leadOscs = null;
+      }
     }
     beatCount = 0;
+    noiseBuffer = null;
   }
 
   function update(gameState) {
