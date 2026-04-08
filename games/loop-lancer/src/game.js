@@ -194,6 +194,41 @@ const Music = (() => {
   let proximityFactor = 0; // 0 = far, 1 = very close
   let waveIntensity = 0; // 0..1, ramps up with wave number
 
+  // Persistent oscillator state
+  let subOsc = null;
+  let leadOscs = null;
+
+  // Noise buffer for hi-hat
+  let noiseBuffer = null;
+
+  function getNoiseBuffer() {
+    if (noiseBuffer) return noiseBuffer;
+    const a = getCtx();
+    const len = a.sampleRate * 0.05;
+    noiseBuffer = a.createBuffer(1, len, a.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < len; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    return noiseBuffer;
+  }
+
+  // Bass line patterns (scale degrees, -1 = rest)
+  const BASS_PATTERNS = [
+    [0, -1, -1, -1, -1, -1, -1, -1, 4, -1, -1, -1, -1, -1, -1, -1],
+    [0, -1, -1, -1, 4, -1, -1, -1, 3, -1, -1, -1, 4, -1, -1, -1],
+    [0, -1, 0, -1, 4, -1, 3, -1, 5, -1, 4, -1, 3, -1, 2, -1],
+    [0, 0, -1, 0, 4, -1, 4, 3, 5, -1, 5, 4, 3, 3, 2, -1],
+  ];
+
+  // Arpeggio note pools (scale degrees)
+  const ARP_POOLS = [
+    [0, 4],
+    [0, 2, 4],
+    [0, 2, 4, 6],
+    [0, 1, 2, 3, 4, 5, 6],
+  ];
+
   // Layer gain nodes
   const layers = {};
 
@@ -222,13 +257,160 @@ const Music = (() => {
     return KEY * SCALE[scale % SCALE.length] * 2 ** octave;
   }
 
-  // --- Layer scheduling functions (filled in by later tasks) ---
-  function scheduleSub() {}
-  function scheduleKick() {}
-  function scheduleHihat() {}
-  function scheduleBass() {}
-  function scheduleArp() {}
-  function updateLead() {}
+  // --- Layer scheduling functions ---
+  function scheduleSub(time) {
+    if (subOsc) return;
+    const a = getCtx();
+    subOsc = a.createOscillator();
+    subOsc.type = 'sine';
+    subOsc.frequency.value = KEY;
+    const sub2 = a.createOscillator();
+    sub2.type = 'sine';
+    sub2.frequency.value = KEY * 2;
+    const sub2Gain = a.createGain();
+    sub2Gain.gain.value = 0;
+    sub2.connect(sub2Gain);
+    sub2Gain.connect(layers.sub);
+    subOsc.connect(layers.sub);
+    subOsc.start(time);
+    sub2.start(time);
+    subOsc._harmGain = sub2Gain;
+    subOsc._harm = sub2;
+  }
+
+  function scheduleKick(time) {
+    if (beatCount % 4 !== 0) return;
+    const a = getCtx();
+    const osc = a.createOscillator();
+    const gain = a.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(150 + waveIntensity * 30, time);
+    osc.frequency.exponentialRampToValueAtTime(40, time + 0.08);
+    gain.gain.setValueAtTime(1, time);
+    gain.gain.exponentialRampToValueAtTime(0.01, time + 0.15);
+    osc.connect(gain);
+    gain.connect(layers.kick);
+    osc.start(time);
+    osc.stop(time + 0.15);
+  }
+
+  function scheduleHihat(time) {
+    const isSixteenth = beatCount % 2 !== 0;
+    if (isSixteenth && waveIntensity < 0.4) return;
+    if (isSixteenth && waveIntensity < 0.7 && beatCount % 4 !== 1) return;
+
+    const a = getCtx();
+    const src = a.createBufferSource();
+    src.buffer = getNoiseBuffer();
+    const bandpass = a.createBiquadFilter();
+    bandpass.type = 'highpass';
+    bandpass.frequency.value = 7000 + waveIntensity * 3000;
+    const gain = a.createGain();
+    const isEighth = beatCount % 2 === 0;
+    const vol = isEighth ? 1 : 0.5 + waveIntensity * 0.3;
+    gain.gain.setValueAtTime(vol, time);
+    gain.gain.exponentialRampToValueAtTime(0.01, time + 0.03);
+    src.connect(bandpass);
+    bandpass.connect(gain);
+    gain.connect(layers.hihat);
+    src.start(time);
+    src.stop(time + 0.04);
+  }
+
+  function scheduleBass(time) {
+    if (currentWave < 3) return;
+    const pos = beatCount % 16;
+    const patIdx = Math.min(
+      BASS_PATTERNS.length - 1,
+      Math.floor(waveIntensity * BASS_PATTERNS.length),
+    );
+    const deg = BASS_PATTERNS[patIdx][pos];
+    if (deg === -1) return;
+
+    const a = getCtx();
+    const freq = note(deg, 1);
+    const osc = a.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.value = freq;
+    const filter = a.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 300 + waveIntensity * 600;
+    filter.Q.value = 2;
+    const gain = a.createGain();
+    const dur = (beatDur / 4) * 0.8;
+    gain.gain.setValueAtTime(1, time);
+    gain.gain.linearRampToValueAtTime(0, time + dur);
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(layers.bass);
+    osc.start(time);
+    osc.stop(time + dur + 0.01);
+  }
+
+  function scheduleArp(time) {
+    if (currentWave < 5) return;
+    if (currentCombo < 3 && beatCount % 2 !== 0) return;
+
+    const a = getCtx();
+    const poolIdx = Math.min(
+      ARP_POOLS.length - 1,
+      Math.floor(currentCombo / 2),
+    );
+    const pool = ARP_POOLS[poolIdx];
+    const deg = pool[beatCount % pool.length];
+    const freq = note(deg, 2);
+
+    const osc = a.createOscillator();
+    osc.type = 'square';
+    osc.frequency.value = freq;
+    const filter = a.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 1500 + waveIntensity * 2000 + currentCombo * 200;
+    const gain = a.createGain();
+    const dur = (beatDur / 4) * 0.5;
+    gain.gain.setValueAtTime(1, time);
+    gain.gain.linearRampToValueAtTime(0, time + dur);
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(layers.arp);
+    osc.start(time);
+    osc.stop(time + dur + 0.01);
+  }
+
+  function updateLead(a) {
+    if (currentWave < 7) {
+      if (leadOscs) {
+        leadOscs[0].stop(a.currentTime + 0.05);
+        leadOscs[1].stop(a.currentTime + 0.05);
+        leadOscs = null;
+      }
+      return;
+    }
+
+    if (!leadOscs) {
+      const freq = note(4, 3);
+      const osc1 = a.createOscillator();
+      const osc2 = a.createOscillator();
+      osc1.type = 'sawtooth';
+      osc2.type = 'sawtooth';
+      osc1.frequency.value = freq;
+      osc2.frequency.value = freq + 2;
+      osc1.connect(layers.lead);
+      osc2.connect(layers.lead);
+      osc1.start(a.currentTime);
+      osc2.start(a.currentTime);
+      leadOscs = [osc1, osc2];
+    }
+
+    const baseFreq = note(4, 3);
+    const detune = 2 + proximityFactor * 8;
+    leadOscs[0].frequency.setTargetAtTime(baseFreq, a.currentTime, 0.05);
+    leadOscs[1].frequency.setTargetAtTime(
+      baseFreq + detune,
+      a.currentTime,
+      0.05,
+    );
+  }
 
   function schedulerTick() {
     const a = getCtx();
@@ -353,6 +535,10 @@ const Music = (() => {
       now,
       tc,
     );
+
+    if (subOsc?._harmGain) {
+      subOsc._harmGain.gain.setTargetAtTime(waveIntensity * 0.3, now, tc);
+    }
 
     updateLead(a);
   }
